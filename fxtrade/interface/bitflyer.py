@@ -19,9 +19,7 @@ from fractions import Fraction
 
 from requests.exceptions import RequestException
 
-import settings
-
-from trade import Transfer, Trade
+from ..trade import Transfer, Trade, History
 
 def build_headers(api_key: str, api_secret: str, method: str, endpoint: str, body: str='') -> dict:
     timestamp = str(time.time())
@@ -135,7 +133,6 @@ def order(side: str, order_type: str, price: int, size: float, expire: int=1000)
     
     return send_request(base_url, endpoint, method='POST', body=body, api_key=api_key, api_secret=api_secret)
     
-
 def order_cancel(self):
     base_url = 'https://api.bitflyer.com'
     endpoint = "/v1/me/cancelchildorder"
@@ -165,23 +162,26 @@ def all_order_cancel():
     response = requests.post(base_url + endpoint, data=body, headers=headers)
     return response.status_code
 
+def cashflow_to_history(df):
+    df_buy = df[df['trade_type'] == 'BUY']
+    df_sell = df[df['trade_type'] == 'SELL']
+    
+    buy_his = df_buy[['trade_date', 'order_id', 'code_x', 'X(t)', 'code_y', 'Y(t+dt)']].copy()
+    buy_his['R(yt/xt)'] = buy_his['Y(t+dt)'] / buy_his['X(t)']
+    buy_his.columns = ['t', 'order_id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)']
+    
+    sell_his = df_sell[['trade_date', 'order_id', 'code_y', 'Y(t)', 'code_x', 'X(t+dt)']].copy()
+    sell_his['R(yt/xt)'] = sell_his['X(t+dt)'] / sell_his['Y(t)']
+    sell_his.columns = ['t', 'order_id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)']
+    
+    ret = pd.concat([buy_his, sell_his], axis=0).sort_values('t', ascending=True)
+    
+    return History.from_dataframe(ret)
+
 class BitflyerAPI:
-    def __init__(self, api_key, api_secret, product_code='btc_jpy'):
+    def __init__(self, api_key, api_secret):
         self.api_key = api_key
         self.api_secret = api_secret
-        self.product_code = product_code
-    
-    def build_headers(self, method: str, endpoint: str, body: str=''):
-        return build_headers(self.api_key, self.api_secret, method, endpoint, body)
-    
-    def get_balance(self):
-        try:
-            response = get_balance(self.api_key, self.api_secret)
-            response.raise_for_status()
-        except RequestException as e: 
-            print(e)
-            reponse = None
-        return response.json()
     
     def get_balance_history(self, currency_code='JPY'):
         try:
@@ -192,105 +192,47 @@ class BitflyerAPI:
             response = None
         return response.json()
     
-    def get_ticker(self):
-        try:
-            response = get_ticker(self.product_code)
-            response.raise_for_status()
-        except RequestException as e:
-            print(e)
-            response = None
-        return response.json()
-    
-    def get_trading_commision(self):
-        try:
-            response = get_trading_commision(self.api_key, self.api_secret, self.product_code)
-            response.raise_for_status()
-        except RequestException as e:
-            print(e)
-            response = None
-        return response.json()
-    
-    def get_child_orders(self):
-        try:
-            response = get_child_orders(self.api_key, self.api_secret, product_code=self.product_code)
-            response.raise_for_status()
-        except RequestException as e:
-            print(e)
-            response = None
-        return response.json()
-    
-    def get_cash_flow(self):
+    def get_cashflow(self, start_date=None):
         df_jpy = pd.DataFrame.from_dict(self.get_balance_history(currency_code='JPY'))
         df_btc = pd.DataFrame.from_dict(self.get_balance_history(currency_code='BTC'))
         
-        df_jpy = df_jpy[['order_id', 'product_code', 'trade_date', 'trade_type', 'amount', 'quantity', 'commission', 'balance']]
-        df_jpy.columns = ['order_id', 'product_code', 'trade_date', 'trade_type', 'X(t)', 'Y(t+dt)', 'commission_x', 'x(t)']
-        df_jpy.set_index('order_id')
+        meta_columns = ['order_id', 'trade_date', 'product_code', 'trade_type']
+        cash_columns = ['balance', 'amount', 'commission']
+        x_columns = ['x(t)', 'X(t)', 'commission_x']
+        y_columns = ['y(t)', 'Y(t)', 'commission_y']
+        all_columns = ['id'] + meta_columns + \
+            ['code_x', 'code_y', 'x(t)', 'y(t)', 'X(t)', 'Y(t)', 'X(t+dt)', 'Y(t+dt)', 'commission_x', 'commission_y']
         
-        df_btc = df_btc[['order_id', 'amount', 'quantity', 'commission', 'balance']]
-        df_btc.columns = ['order_id', 'X(t+dt)', 'Y(t)', 'commission_y', 'y(t)']
-        df_btc.set_index('order_id')
+        df_meta = df_jpy[['id'] + meta_columns].copy()
+        df_meta['trade_date'] = df_meta['trade_date'].apply(lambda x: datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%f'))
         
-        df_all = pd.merge(df_jpy, df_btc, left_on='order_id', right_on='order_id', how='outer')
+        df_x = df_jpy[['id'] + cash_columns].copy()
+        df_x.columns = ['id'] + x_columns
         
-        df_all = df_all.dropna(subset=['trade_type', 'trade_date'])
-        df_all['trade_date'] = df_all['trade_date'].apply(lambda x: datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%f'))
+        df_x[x_columns] = df_x[x_columns].applymap(lambda x: Fraction(str(x)))
+        df_x['X(t)'] += df_x['commission_x']
+        df_x['X(t+dt)'] = df_x['X(t)'].apply(lambda x: 0.0 if x < 0 else x)
+        df_x['X(t)'] = df_x['X(t)'].apply(lambda x: -x if x < 0 else 0.0)
+        df_x['code_x'] = df_jpy['currency_code']
         
-        return df_all[['order_id', 'product_code', 'trade_date', 'trade_type',
-                       'x(t)', 'y(t)', 'X(t)', 'Y(t)', 'X(t+dt)', 'Y(t+dt)', 'commission_x', 'commission_y']].copy()
+        df_y = df_btc[['id'] + cash_columns].copy()
+        df_y.columns = ['id'] + y_columns
+        df_y[y_columns] = df_y[y_columns].applymap(lambda x: Fraction(str(x)))
+        df_y['Y(t)'] += df_y['commission_y']
+        df_y['Y(t+dt)'] = df_y['Y(t)'].apply(lambda y: 0.0 if y < 0 else y)
+        df_y['Y(t)'] = df_y['Y(t)'].apply(lambda y: -y if y < 0 else 0.0)
+        df_y['code_y'] = df_btc['currency_code']
+        
+        df_xy = pd.merge(df_x, df_y, left_on='id', right_on='id', how='outer')
+        df_all = pd.merge(df_meta, df_xy, left_on='id', right_on='id', how='outer')
+        
+        df_ret = df_all[all_columns]
+        if isinstance(start_date, datetime):
+            df_ret = df_ret[df_ret['trade_date'] >= start_date]
+        
+        return df_ret.copy()
     
-    def get_trade_history(self):
-        #df_balance = pd.DataFrame.from_dict(self.get_balance_history())
-        #df_order = pd.DataFrame.from_dict(self.get_child_orders())
-        df = self.get_cash_flow()
-        
-        #df = pd.merge(df_balance.drop(['id'], axis=1),
-        #              df_order.drop(['id', 'product_code', 'price'], axis=1),
-        #              left_on='order_id', right_on='child_order_id')
-        
-        df['parsed_trade_date'] = df['trade_date'].apply(lambda x: datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%f'))
-        
-        columns = [
-            'parsed_trade_date',
-            'trade_date',
-            'order_id',
-            'product_code',
-            'currency_code',
-            'trade_type',
-            'quantity',
-            'amount',
-            'price',
-            'commission',
-            'balance',
-        ]
-
-        return df[columns].copy()
+    def get_history(self, start_date=None):
+        df = self.get_cashflow(start_date)
+        return cashflow_to_history(df)
     
-    def get_trade_list(self, begin=None):
-        df_cash_flow = self.get_cash_flow()
-        #df_trades = self.get_trade_history()
-        
-        cash_flows = []
-        trades = []
-        for idx, row in df_cash_flow.iterrows():
-            if row['trade_type'] not in { 'BUY', 'SELL' }:
-                t = pd.Timestamp(datetime.strptime(row['trade_date'], '%Y-%m-%dT%H:%M:%S.%f'))
-                cash_flows.append(Transfer(Fraction(row['amount']), row['currency_code'], t))
-            else:
-                stock = row['product_code']
-                amount = Fraction(abs(row['amount']))
-                quantity = Fraction(row['quantity'])
-
-                if row['trade_type'] == 'BUY':
-                    trades.append(Trade.buy(stock, y=quantity, ry=amount / quantity, t=row['parsed_trade_date']))
-                elif row['trade_type'] == 'SELL':
-                    trades.append(Trade.sell(stock, y=quantity, ry=amount / quantity, t=row['parsed_trade_date']))
-                else:
-                    raise ValueError('hoge')
-
-        all_flows = sorted(cash_flows + trades, key=lambda x: x.t)
-
-        if begin is not None:
-            all_flows = list(filter(lambda x: x.t >= begin, all_flows))
-        
-        return all_flows

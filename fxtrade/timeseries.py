@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from datetime import datetime, timedelta
 from typing import Union, Optional
 
 INTERVALS = [
@@ -132,3 +133,87 @@ def validate_index(df):
         raise ValueError("could not find which way it is sorted")
     
     return {'ascending': ascending}
+
+def this_year_first(t):
+    return datetime(t.year, 1, 1)
+
+def next_year_first(t):
+    return datetime(t.year+1, 1, 1)
+
+def count_years(begin, end):
+    return end.year - begin.year
+
+def add_years(t, dy):
+    return datetime(t.year+dy, t.month, t.day)
+
+def year_sections(begin, end):
+    if begin >= end:
+        raise ValueError("begin must be before than end")
+    
+    b = this_year_first(begin)
+    e = next_year_first(end)
+    
+    for i in range(count_years(b, e)):
+        x = add_years(b, i)
+        y = add_years(b, i+1)
+        yield (x, y)
+
+def this_month_first(t):
+    return datetime(t.year, t.month, 1)
+    
+def next_month_first(t):
+    if t.month == 12:
+        return datetime(t.year+1, 1, 1)
+    return datetime(t.year, t.month+1, 1)
+
+def count_months(begin, end):
+    years = end.year - begin.year
+    months = end.month - begin.month
+    
+    return years * 12 + months
+
+def add_months(t, dm):
+    year = t.year + (dm // 12)
+    month = t.month + (dm % 12)
+    
+    if month > 12:
+        year += 1
+        month -= 12
+    
+    return datetime(year, month, t.day)
+
+def month_sections(begin, end):
+    if begin >= end:
+        raise ValueError("begin must be before than end")
+    
+    b = this_month_first(begin)
+    e = next_month_first(end)
+    
+    for i in range(count_months(b, e)):
+        x = add_months(b, i)
+        y = add_months(b, i+1)
+        yield (x, y)
+        
+def this_day_first(t):
+    return datetime(t.year, t.month, t.day)
+
+def next_day_first(t):
+    return datetime(t.year, t.month, t.day) + timedelta(days=1)
+
+def count_days(begin, end):
+    return (end - begin).days
+
+def add_days(t, dd):
+    return t + timedelta(days=dd)
+
+def day_sections(begin, end):
+    if begin >= end:
+        raise ValueError("begin must be before than end")
+    
+    b = this_day_first(begin)
+    e = next_day_first(end)
+    
+    for i in range(count_days(b, e)):
+        x = add_days(b, i)
+        y = add_days(b, i+1)
+        yield (x, y)

@@ -31,6 +31,14 @@ class ChartAPI(ABC):
         pass
     
     @property
+    def default_save_fstring(self):
+        pass
+    
+    @property
+    def default_save_iterator(self):
+        pass
+    
+    @property
     @abstractmethod
     def empty(self):
         pass
@@ -61,5 +69,5 @@ class ChartAPI(ABC):
 
 class TradeAPI(ABC):
     @abstractmethod
-    def __init__(self, api_key):
+    def __init__(self, api_key, api_secret):
         pass

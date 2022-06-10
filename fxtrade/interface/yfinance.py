@@ -4,7 +4,8 @@ import pandas as pd
 
 from datetime import datetime
 
-from .api import ChartAPI
+from ..api import ChartAPI
+from ..timeseries import year_sections, month_sections, day_sections
 
 # chart_range ... 1d, 5d, 1mo, 3mo, 6mo, 1y, 5y, 10y, ytd, max
 # interval ... 1m, 5m, 15m, 1d, 1wk, 1mo
@@ -77,6 +78,22 @@ class YahooFinanceAPI(ChartAPI):
             '10y-1d': ('10y', '1d'),
             '1mo-15m': ('1mo', '15m'),
             '5d-1m': ('5d', '1m'),
+        }
+    
+    @property
+    def default_save_fstring(self):
+        return {
+            '10y-1d': '%Y.csv',
+            '1mo-15m': '%Y-%m.csv',
+            '5d-1m': '%Y-%m-%d.csv',
+        }
+    
+    @property
+    def default_save_iterator(self):
+        return {
+            '10y-1d': year_sections,
+            '1mo-15m': month_sections,
+            '5d-1m': day_sections,
         }
     
     @property
