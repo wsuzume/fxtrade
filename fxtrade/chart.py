@@ -8,8 +8,10 @@ from glob import glob
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
+from .analysis import log10
 from .api import ChartAPI
 from .dirmap import Directory, DirMap
+from .emulator import ChartEmulatorAPI
 from .timeseries import merge, down_sampling, select, normalized_timeindex, get_first_timestamp, to_timedelta
 
 def standardize(df: pd.DataFrame):
@@ -49,7 +51,6 @@ def read_csv(path):
     return pd.read_csv(path, index_col=0, parse_dates=True)
 
 def default_merge_function(df_prev, df):
-    #return pd.concat([df1, df2], axis=0)
     return merge(df_prev, df)
     
 def default_load_function(chart, key):
@@ -66,6 +67,13 @@ def default_load_function(chart, key):
         df_ret = default_merge_function(df_ret, df)
 
     return df_ret.sort_index()
+
+class LogChart:
+    def __init__(self, dfs):
+        self.dfs = dfs
+    
+    def __getitem__(self, key):
+        return log10(self.dfs[key])
 
 class Chart:
     def __init__(self,
@@ -85,39 +93,46 @@ class Chart:
     def __getitem__(self, key):
         return self.dfs[key]
     
-    def _download(self, key: str):
+    @property
+    def log10(self):
+        return LogChart(self.dfs)
+    
+    def _download(self, key: str, t: Optional[datetime]=None):
         crange, interval = self.api.default_crange_intervals[key]
         df = self.api.download(ticker=self.ticker,
                                crange=crange,
-                               interval=interval)
+                               interval=interval,
+                               t=t)
         return standardize(df)
     
-    def _download_all(self):
+    def _download_all(self, t: Optional[datetime]=None):
         ret = {}
         for key in self.api.default_crange_intervals.keys():
-            ret[key] = self.download(key)
+            ret[key] = self.download(key, t=t)
         return ret
     
-    def download(self, key: str=None):
+    def download(self, key: str=None, t: Optional[datetime]=None):
         if key is None:
-            return self._download_all()
-        return self._download(key)
+            return self._download_all(t=t)
+        return self._download(key, t=t)
     
-    def _update(self, key: str, merge_function=merge):
-        self.dfs[key] = self.download(key)
-        #self.dfs[key] = merge_function(self.dfs[key], self.download(key))
+    def _update(self, key: str, df: pd.DataFrame=None, merge_function=merge):
+        if df is None:
+            df = self.download(key)
+        self.dfs[key] = merge_function(self.dfs[key], df)
         return self.dfs[key]
     
-    def _update_all(self, merge_function=merge):
+    def _update_all(self, dfs=None, merge_function=merge):
         ret = {}
         for key in self.api.default_crange_intervals.keys():
-            ret[key] = self._update(key)
+            df = dfs[key] if dfs is not None else None
+            ret[key] = self._update(key, df)
         return ret
     
-    def update(self, key: str=None, merge_function=merge):
+    def update(self, key: str=None, df=None, merge_function=merge):
         if key is None:
-            return self._update_all(merge_function)
-        return self._update(key, merge_function)
+            return self._update_all(df, merge_function)
+        return self._update(key, df, merge_function)
     
     def _save(self, key: str, merge_function=default_merge_function):
         save_dir = self.dirmap[key]
@@ -137,6 +152,12 @@ class Chart:
             
             if df_prev is not None:
                 df_part = merge_function(df_prev, df_part)
+            
+            save_idx = pd.Series(df_part.index).apply(
+                            self.api.default_timestamp_filter[key]
+                       )
+            
+            df_part = df_part.loc[save_idx.values]
             
             df_part.to_csv(path, index=True)
         
@@ -158,7 +179,7 @@ class Chart:
         if not self.dirmap[key].exists():
             raise FileNotFoundError(f"Directory not found '{self.dirmap[key]}'")
             
-        self.dfs[key] = load_function(self, key)
+        self.dfs[key] = standardize(load_function(self, key))
         return self.dfs[key]
     
     def _load_all(self):
@@ -193,4 +214,8 @@ class Chart:
             self.dfs[key] = df
         
         return df
+    
+    def create_emulator(self, root_dir):
+        new_api = ChartEmulatorAPI(self.api, self.dfs, root_dir)
+        return Chart(self.ticker, new_api, root_dir)
     

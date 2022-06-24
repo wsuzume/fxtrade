@@ -13,3 +13,6 @@ class Trader:
         self.api = api
         self.history = history
         self.dirmap = DirMap(root_dir=Path(data_dir))
+        
+    def create_emulator(self):
+        return None

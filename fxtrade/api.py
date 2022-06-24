@@ -31,10 +31,17 @@ class ChartAPI(ABC):
         pass
     
     @property
+    @abstractmethod
+    def default_timestamp_filter(self):
+        pass
+    
+    @property
+    @abstractmethod
     def default_save_fstring(self):
         pass
     
     @property
+    @abstractmethod
     def default_save_iterator(self):
         pass
     
@@ -54,7 +61,7 @@ class ChartAPI(ABC):
         pass
     
     @abstractmethod
-    def download(self, ticker, crange, interval, as_dataframe):
+    def download(self, ticker, crange, interval, t, as_dataframe):
         pass
     
     def download_now(self, ticker, as_dataframe=True):

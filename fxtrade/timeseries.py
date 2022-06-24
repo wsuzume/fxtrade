@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from datetime import datetime, timedelta
-from typing import Union, Optional
+from typing import Union, Optional, Iterable
 
 INTERVALS = [
     '1m', '5m', '10m', '15m', '30m',
@@ -13,6 +13,13 @@ INTERVALS = [
 MINUTES = {'1m': 1, '5m': 5, '10m': 10, '15m': 15, '30m': 30, }
 HOURS = {'1h': 1, '3h': 3, '6h': 6, '12h': 12, }
 DAYS = {'1d': 1, '3d': 3, '5d': 5, '7d': 7, }
+
+def delta(ts: Iterable):
+    dts = pd.Series(ts).diff().value_counts()
+    if len(dts) != 1:
+        raise ValueError("all timedelta must be the same")
+    
+    return dts.index[0]
 
 def to_timedelta(interval: str) -> pd.Timedelta:
     if interval not in INTERVALS:

@@ -81,6 +81,16 @@ class YahooFinanceAPI(ChartAPI):
         }
     
     @property
+    def default_timestamp_filter(self):
+        return {
+            '10y-1d': lambda x: (x.hour == 0) and (x.minute == 0) \
+                                and (x.second == 0) and (x.nanosecond == 0),
+            '1mo-15m': lambda x: (x.minute % 15 == 0) \
+                                and (x.second == 0) and (x.nanosecond == 0),
+            '5d-1m': lambda x: (x.second == 0) and (x.nanosecond == 0),
+        }
+    
+    @property
     def default_save_fstring(self):
         return {
             '10y-1d': '%Y.csv',
@@ -108,7 +118,10 @@ class YahooFinanceAPI(ChartAPI):
     def maxlong(self):
         return ('10y', '1d')
     
-    def download(self, ticker, crange, interval, as_dataframe=True):
+    def download(self, ticker, crange, interval, t=None, as_dataframe=True):
+        if t is not None:
+            raise ValueError("specifying the time is not supported. t must be None.")
+        
         if ticker not in self.tickers:
             raise ValueError(f"ticker '{ticker}' not in {self.tickers}")
         if crange not in self.cranges:
