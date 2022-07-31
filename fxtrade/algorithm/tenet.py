@@ -84,13 +84,13 @@ class Tenet:
         
         if last_trade.x.code == 'JPY':
             # last trade was BUY
-            best_bid = fx.trader.get_best_bid()
+            best_bid = 1 / fx.trader.get_best_bid()
             
             return Trade.from_stock_and_rate(last_trade.x, best_bid)
         
         # last trade was SELL
         trade = fx.get_max_available()
-        return trade % 15
+        return trade % 4
         
     
     def decide_to_sell(self, fx):
