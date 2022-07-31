@@ -317,6 +317,7 @@ class BitflyerAPI(TradeAPI):
             response.raise_for_status()
         except RequestException as e:
             print(e)
+            print(response)
             response = None
         
         return response.json()
@@ -327,6 +328,7 @@ class BitflyerAPI(TradeAPI):
             response.raise_for_status()
         except RequestException as e:
             print(e)
+            print(response)
             response = None
         
         return response.json()
