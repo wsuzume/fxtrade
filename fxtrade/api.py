@@ -78,3 +78,43 @@ class TradeAPI(ABC):
     @abstractmethod
     def __init__(self, api_key, api_secret):
         pass
+    
+    @abstractmethod
+    def minimum_order_quantity(self, code):
+        pass
+    
+    @abstractmethod
+    def maximum_order_quantity(self, code):
+        pass
+    
+    @abstractmethod
+    def get_balance(self):
+        pass
+    
+    @abstractmethod
+    def get_commission(self, product_code=None):
+        pass
+    
+    @abstractmethod
+    def get_ticker(self, code):
+        pass
+    
+    @abstractmethod
+    def get_best_bid(self, code):
+        pass
+    
+    @abstractmethod
+    def get_best_ask(self, code):
+        pass
+    
+    @abstractmethod
+    def get_history(self, start_date=None):
+        pass
+    
+    @abstractmethod
+    def buy(self, size):
+        pass
+    
+    @abstractmethod
+    def sell(self, size):
+        pass

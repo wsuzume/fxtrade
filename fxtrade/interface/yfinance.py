@@ -1,6 +1,7 @@
 import json
 import requests
 import pandas as pd
+import warnings
 
 from datetime import datetime
 
@@ -120,7 +121,7 @@ class YahooFinanceAPI(ChartAPI):
     
     def download(self, ticker, crange, interval, t=None, as_dataframe=True):
         if t is not None:
-            raise ValueError("specifying the time is not supported. t must be None.")
+            warnings.warn(UserWarning("specifying the time is not supported. t must be None."))
         
         if ticker not in self.tickers:
             raise ValueError(f"ticker '{ticker}' not in {self.tickers}")

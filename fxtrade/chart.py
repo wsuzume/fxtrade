@@ -86,6 +86,9 @@ class Chart:
         self.dirmap = DirMap(root_dir=Path(data_dir) / ticker)
         self.dfs = {}
         
+        self.flush()
+    
+    def flush(self):
         for key in self.api.default_crange_intervals.keys():
             self.dirmap.add_branch(key)
             self.dfs[key] = self.api.empty
@@ -116,23 +119,39 @@ class Chart:
             return self._download_all(t=t)
         return self._download(key, t=t)
     
-    def _update(self, key: str, df: pd.DataFrame=None, merge_function=merge):
+    def _update(self, key: str, df: pd.DataFrame=None, t=None, merge_function=merge):
         if df is None:
-            df = self.download(key)
+            df = self.download(key=key, t=t)
         self.dfs[key] = merge_function(self.dfs[key], df)
         return self.dfs[key]
     
-    def _update_all(self, dfs=None, merge_function=merge):
+    def _update_all(self, dfs=None, t=None, merge_function=merge):
         ret = {}
         for key in self.api.default_crange_intervals.keys():
             df = dfs[key] if dfs is not None else None
-            ret[key] = self._update(key, df)
+            ret[key] = self._update(key, df, t=t, merge_function=merge_function)
         return ret
     
-    def update(self, key: str=None, df=None, merge_function=merge):
+    def update(self, key: str=None, df=None, t=None, merge_function=merge):
         if key is None:
-            return self._update_all(df, merge_function)
-        return self._update(key, df, merge_function)
+            return self._update_all(dfs=df, t=t, merge_function=merge_function)
+        return self._update(key=key, df=df, t=t, merge_function=merge_function)
+    
+    def normalize(self, key: Optional[str]=None):
+        if key is None:
+            for key in self.dfs.keys():
+                self.normalize(key)
+            
+            return self.dfs
+        
+        df = self.dfs[key]
+
+        save_idx = pd.Series(df.index).apply(
+                        self.api.default_timestamp_filter[key]
+                   )
+
+        self.dfs[key] = df.loc[save_idx.values].dropna()
+        return self.dfs[key]
     
     def _save(self, key: str, merge_function=default_merge_function):
         save_dir = self.dirmap[key]

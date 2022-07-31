@@ -19,6 +19,54 @@ def log10(df: pd.DataFrame):
 def diff(xs: pd.Series):
     return xs.diff().dropna()
 
+def geomeans(xs, alpha, dt):
+    xs = xs.dropna()
+    if len(xs) == 0:
+        return xs
+    
+    ts = pd.Series(xs.index, index=xs.index).diff().apply(lambda x: x.total_seconds())
+    ts /= dt.total_seconds()
+
+    Xt = pd.DataFrame([xs, ts]).T.reset_index(drop=True)
+    
+    molecule = Xt.iloc[0, 0]
+    denominator = 1.0
+    
+    gmeans = np.empty(len(xs))
+    gmeans[0] = molecule
+    
+    for i, x, t in Xt.iloc[1:].itertuples():
+        beta = alpha ** t
+        molecule = molecule * beta + x
+        denominator = denominator * beta + 1
+        
+        gmeans[i] = molecule / denominator
+    
+    return pd.Series(gmeans, index=xs.index)
+
+def geovariances(xs, alpha, dt):
+    gmeans = geomeans(xs, alpha, dt)
+    return geomeans((xs - gmeans) ** 2, alpha, dt)
+
+def infinite_trade_result(xs, ys):
+    residue = xs - ys
+    return xs[residue > 0].sum() - ys[residue < 0].sum()
+
+def over_under_ratio(xs, ys):
+    residue = xs - ys
+    over = (residue > 0).sum()
+    under = (residue < 0).sum()
+    if under == 0:
+        return np.nan
+    return over / under
+
+def straddle_count(xs, ys):
+    residue = xs - ys
+    count = np.sum(np.diff(residue > 0) > 0)
+    if count == 0:
+        return np.nan
+    return count
+
 def estimate_laplace_param(xs: pd.Series):
     loc = xs.median()    
     scale = np.abs(xs - loc).mean()

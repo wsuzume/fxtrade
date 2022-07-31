@@ -19,7 +19,11 @@ from fractions import Fraction
 
 from requests.exceptions import RequestException
 
+from ..api import TradeAPI
 from ..trade import Transfer, Trade, History
+from ..stock import Stock, Rate
+from ..stocks import JPY, BTC
+from ..wallet import Wallet
 
 def build_headers(api_key: str, api_secret: str, method: str, endpoint: str, body: str='') -> dict:
     timestamp = str(time.time())
@@ -88,7 +92,7 @@ def get_ticker(product_code='btc_jpy'):
     
     return send_request(base_url, endpoint, params=params)
 
-def get_trading_commision(api_key, api_secret, product_code):
+def get_commission(api_key, api_secret, product_code):
     base_url = 'https://api.bitflyer.com'
     endpoint = '/v1/me/gettradingcommission'
     
@@ -109,7 +113,7 @@ def get_child_orders(api_key, api_secret, product_code='btc_jpy'):
 
     return send_request(base_url, endpoint, method='GET', params=params, api_key=api_key, api_secret=api_secret)
 
-def order(side: str, order_type: str, price: int, size: float, expire: int=1000):
+def order(api_key, api_secret, side: str, order_type: str, price: int, size: float, expire: int=1000):
     if side not in { 'BUY', 'SELL' }:
         raise ValueError("")
     
@@ -123,7 +127,7 @@ def order(side: str, order_type: str, price: int, size: float, expire: int=1000)
         "product_code": 'btc_jpy',  # ビットコイン（日本円）
         "child_order_type": order_type,  # 指値。成行きの場合は、MARKET
         "side": side,  # 「買い」注文
-        "price": price,  # 価格指定
+        #"price": price,  # 価格指定
         "size": size,  # 注文数量
         "minute_to_expire": expire,  # 期限切れまでの時間（分）
         "time_in_force": 'GTC'  # GTC発注
@@ -174,15 +178,86 @@ def cashflow_to_history(df):
     sell_his['R(yt/xt)'] = sell_his['X(t+dt)'] / sell_his['Y(t)']
     sell_his.columns = ['t', 'order_id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)']
     
-    ret = pd.concat([buy_his, sell_his], axis=0).sort_values('t', ascending=True)
+    ret = pd.concat([buy_his, sell_his], axis=0).sort_values('t', ascending=False).reset_index(drop=True)
     
     return History.from_dataframe(ret)
 
-class BitflyerAPI:
+class BitflyerAPI(TradeAPI):
     def __init__(self, api_key, api_secret):
         self.api_key = api_key
         self.api_secret = api_secret
     
+    def minimum_order_quantity(self, code):
+        qs = {
+            'BTC': BTC('0.001')
+        }
+        return qs[code]
+    
+    def maximum_order_quantity(self, code):
+        qs = {
+            'BTC': BTC('1000')
+        }
+        return qs[code]
+    
+    def get_commission(self, product_code=None):
+        if product_code is None:
+            product_code = 'BTC_JPY'
+        
+        try:
+            response = get_commission(self.api_key, self.api_secret, product_code)
+            response.raise_for_status()
+        except RequestException as e:
+            print(e)
+            response = None
+            
+        resp = response.json()
+        
+        return Fraction(str(resp['commission_rate']))
+    
+    def get_ticker(self, code):
+        if code is None:
+            code = 'btc_jpy'
+        
+        try:
+            response = get_ticker(product_code=code)
+            response.raise_for_status()
+        except RequestException as e:
+            print(e)
+            response = None
+        
+        return response.json()
+    
+    def get_best_bid(self, code):
+        ticker = self.get_ticker(code=code)
+        
+        # 買い値
+        bid_rate = Rate(from_code='BTC', to_code='JPY', r=str(ticker['best_bid']))
+        
+        return bid_rate
+    
+    def get_best_ask(self, code):
+        ticker = self.get_ticker(code=code)
+
+        # 売り値
+        ask_rate = Rate(from_code='BTC', to_code='JPY', r=str(ticker['best_ask']))
+        
+        return ask_rate
+    
+    def get_balance(self):
+        try:
+            response = get_balance(self.api_key, self.api_secret)
+            response.raise_for_status()
+        except RequestException as e:
+            print(e)
+            response = None
+            
+        stocks = response.json()
+        
+        w = Wallet()
+        for stock in stocks:
+            w.add(Stock(stock['currency_code'], str(stock['available'])))
+        return w
+        
     def get_balance_history(self, currency_code='JPY'):
         try:
             response = get_balance_history(self.api_key, self.api_secret, currency_code=currency_code)
@@ -236,3 +311,22 @@ class BitflyerAPI:
         df = self.get_cashflow(start_date)
         return cashflow_to_history(df)
     
+    def buy(self, size):
+        try:
+            response = order(self.api_key, self.api_secret, 'BUY', 'MARKET', 0, size)
+            response.raise_for_status()
+        except RequestException as e:
+            print(e)
+            response = None
+        
+        return response.json()
+    
+    def sell(self, size):
+        try:
+            response = order(self.api_key, self.api_secret, 'SELL', 'MARKET', 0, size)
+            response.raise_for_status()
+        except RequestException as e:
+            print(e)
+            response = None
+        
+        return response.json()

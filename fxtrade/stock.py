@@ -1,5 +1,12 @@
+import math
+import warnings
+
+import numpy as np
+
 from fractions import Fraction
 from typing import Union, Optional
+
+_FLOAT_PRECISE_DIGIT_NUMBER = 6
 
 Numeric = Union[int, str, Fraction]
 
@@ -10,7 +17,13 @@ def as_numeric(x):
     if x is None:
         return None
     if not can_be_precise_num(x):
-        raise TypeError("x must be type of int, str, or fractions.Fraction")
+        if isinstance(x, float):
+            x = str(x)
+            # +1 is for point
+            if len(x) > _FLOAT_PRECISE_DIGIT_NUMBER + 1:
+                warnings.warn(UserWarning("using float and the number of digits may be too large: the accuracy of the calculation may be lost. use str, int, or fractions.Fraction instead."))
+        else:
+            raise TypeError("x must be type of str, int, float, or fractions.Fraction")
     return x if isinstance(x, Fraction) else Fraction(x)
 
 class Stock:
@@ -24,7 +37,15 @@ class Stock:
     @property
     def q(self):
         return self._q
-        
+    
+    def floor(self, n=6):
+        p = 10 ** n
+        return Stock(self.code, str(math.floor(float(self.q) * p) / p))
+    
+    def ceil(self, n=0):
+        p = 10 ** n
+        return Stock(self.code, str(math.ceil(float(self.q) * p) / p))
+    
     def __repr__(self):
         return f"Stock({self.code}, {self.q})"
     

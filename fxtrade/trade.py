@@ -53,6 +53,13 @@ class Trade:
         
         return Trade(x=x, y=y, t=t, order_id=order_id)
     
+    @staticmethod
+    def from_stock_and_rate(stock, rate, t=None, order_id=None):
+        x = stock
+        y = stock * rate
+        
+        return Trade(x, y, t, order_id)
+    
     def __init__(self,
                  x: Stock,
                  y: Stock,
@@ -66,14 +73,38 @@ class Trade:
         self.y = y
         
         self.order_id = order_id
-        
-        self.rate = Rate.from_stocks(self.x, self.y)
+    
+    @property
+    def x(self):
+        return self._x
+    
+    @x.setter
+    def x(self, arg):
+        self._x = arg
+        return arg
+    
+    @property
+    def y(self):
+        return self._y
+    
+    @y.setter
+    def y(self, arg):
+        self._y = arg
+        return arg
+    
+    @property
+    def rate(self):
+        if self.x == 0:
+            return np.nan
+        return Rate.from_stocks(self.x, self.y)
     
     def __repr__(self):
+        r = self.rate.r if isinstance(self.rate, Rate) else np.nan
+        
         if self.order_id is None:
-            return f"Trade({self.t} | R(yt/xt): {float(self.rate.r)} | "\
+            return f"Trade({self.t} | R(yt/xt): {float(r)} | "\
                    f"X(t): {float(self.x.q)}{self.x.code} -> Y(t+dt): {float(self.y.q)}{self.y.code})"
-        return f"Trade({self.order_id} | {self.t} | R(yt/xt): {float(self.rate.r)} | "\
+        return f"Trade({self.order_id} | {self.t} | R(yt/xt): {float(r)} | "\
                f"X(t): {float(self.x.q)}{self.x.code} -> Y(t+dt): {float(self.y.q)}{self.y.code})"
     
     def as_series(self):
@@ -129,6 +160,48 @@ class Trade:
         else:
             settled, unsettled = self.split(trade.x)
             return TradePair(settled, trade), unsettled
+    
+    def xfloor(self, n=0):
+        x = self.x.floor(n)
+        y = x * self.rate
+        
+        return Trade(x, y, self.t, self.order_id)
+    
+    def yfloor(self, n=6):
+        y = self.y.floor(n)
+        x = y / self.rate
+        
+        return Trade(x, y, self.t, self.order_id)
+    
+    def floor(self, n=0):
+        return self.xfloor(n)
+    
+    def xceil(self, n=0):
+        x = self.x.ceil(n)
+        y = x * self.rate
+        
+        return Trade(x, y, self.t, self.order_id)
+    
+    def yceil(self, n=6):
+        y = self.y.ceil(n)
+        x = y / self.rate
+        
+        return Trade(x, y, self.t, self.order_id)
+    
+    def ceil(self, n=6):
+        return self.yceil(n)
+    
+    def __mul__(self, other):
+        return Trade(self.x * other, self.y * other, self.t, self.order_id)
+    
+    def __truediv__(self, other):
+        return Trade(self.x / other, self.y / other, self.t, self.order_id)
+    
+    def __floordiv__(self, other):
+        return Trade(self.x / other, self.y / other, self.t, self.order_id).floor()
+    
+    def __mod__(self, other):
+        return Trade(self.x / other, self.y / other, self.t, self.order_id).ceil()
 
 class TradePair:
     @staticmethod
