@@ -51,6 +51,8 @@ class Trader:
             raise ValueError('under minimum')
         if trade.y > self.maximum_order_quantity(trade.y.code):
             raise ValueError('over maximum')
+            
+        print(trade)
         
         return self.api.buy(float(trade.y.q))
     

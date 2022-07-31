@@ -86,7 +86,7 @@ class Tenet:
             # last trade was BUY
             best_bid = 1 / fx.trader.get_best_bid()
             
-            return Trade.from_stock_and_rate(last_trade.x, best_bid)
+            return Trade.from_stock_and_rate(last_trade.x, best_bid).yfloor()
         
         # last trade was SELL
         trade = fx.get_max_available()
