@@ -1,0 +1,490 @@
+
+
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fxtrade.analysis &#8212; fxtrade 0.0.6 ドキュメント</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bizstyle.css" />
+    
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/translations.js"></script>
+    <script src="../../_static/bizstyle.js"></script>
+    <link rel="index" title="索引" href="../../genindex.html" />
+    <link rel="search" title="検索" href="../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.analysis</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>fxtrade.analysis のソースコード</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Basic analysis tools for FX trade.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+<span class="kn">import</span> <span class="nn">plotly.graph_objects</span> <span class="k">as</span> <span class="nn">go</span>
+<span class="kn">from</span> <span class="nn">matplotlib</span> <span class="kn">import</span> <span class="n">pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="kn">import</span> <span class="n">laplace</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span> <span class="nn">.timeseries</span> <span class="kn">import</span> <span class="n">delta</span>
+
+<div class="viewcode-block" id="log10"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.log10">[ドキュメント]</a><span class="k">def</span> <span class="nf">log10</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Return a dataframe which is applied numpy.log10 on columns [&#39;open&#39;, &#39;close&#39;, &#39;high&#39;, &#39;low&#39;, &#39;volume&#39;].</span>
+<span class="sd">    Copy will be created if copy is True (default True).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;open&#39;</span><span class="p">,</span> <span class="s1">&#39;close&#39;</span><span class="p">,</span> <span class="s1">&#39;high&#39;</span><span class="p">,</span> <span class="s1">&#39;low&#39;</span><span class="p">,</span> <span class="s1">&#39;volume&#39;</span><span class="p">]</span>
+    
+    <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="n">copy</span> <span class="k">else</span> <span class="n">df</span>
+    <span class="n">df</span><span class="p">[</span><span class="n">columns</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">columns</span><span class="p">]</span><span class="o">.</span><span class="n">applymap</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">df</span></div>
+
+<div class="viewcode-block" id="diff"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.diff">[ドキュメント]</a><span class="k">def</span> <span class="nf">diff</span><span class="p">(</span><span class="n">xs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Return xs.diff().dropna().</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">xs</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="emaverage"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.emaverage">[ドキュメント]</a><span class="k">def</span> <span class="nf">emaverage</span><span class="p">(</span><span class="n">xs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return exponential moving average of xs.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    xs : pandas.Series</span>
+<span class="sd">        Contains data which should be calculated EMA. Its index must be type of pandas.DatetimeIndex.</span>
+<span class="sd">    alpha : float</span>
+<span class="sd">        The degree of weighting decrease. Between 0.8 to 0.9 recommended.</span>
+<span class="sd">    dt : pandas.Timedelta</span>
+<span class="sd">        Unit time. Weights decrease exponentially at a rate of alpha per unit time.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">xs</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">xs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">xs</span>
+    
+    <span class="n">ts</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">xs</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">xs</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">())</span>
+    <span class="n">ts</span> <span class="o">/=</span> <span class="n">dt</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span>
+
+    <span class="n">Xt</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([</span><span class="n">xs</span><span class="p">,</span> <span class="n">ts</span><span class="p">])</span><span class="o">.</span><span class="n">T</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    
+    <span class="n">molecule</span> <span class="o">=</span> <span class="n">Xt</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">denominator</span> <span class="o">=</span> <span class="mf">1.0</span>
+    
+    <span class="n">ema</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">xs</span><span class="p">))</span>
+    <span class="n">ema</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">molecule</span>
+    
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">Xt</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">itertuples</span><span class="p">():</span>
+        <span class="n">beta</span> <span class="o">=</span> <span class="n">alpha</span> <span class="o">**</span> <span class="n">t</span>
+        <span class="n">molecule</span> <span class="o">=</span> <span class="n">molecule</span> <span class="o">*</span> <span class="n">beta</span> <span class="o">+</span> <span class="n">x</span>
+        <span class="n">denominator</span> <span class="o">=</span> <span class="n">denominator</span> <span class="o">*</span> <span class="n">beta</span> <span class="o">+</span> <span class="mi">1</span>
+        
+        <span class="n">ema</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">molecule</span> <span class="o">/</span> <span class="n">denominator</span>
+    
+    <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">ema</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">xs</span><span class="o">.</span><span class="n">index</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="emvariances"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.emvariances">[ドキュメント]</a><span class="k">def</span> <span class="nf">emvariances</span><span class="p">(</span><span class="n">xs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return exponential moving average of (xs - ema) ** 2.</span>
+<span class="sd">    Strictly speaking, this is not volatility, but it can be considered as some kind of</span>
+<span class="sd">    historical volatility (easy to calculate).</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    xs : pandas.Series</span>
+<span class="sd">        Contains data which should be calculated EMV. Its index must be type of pandas.DatetimeIndex.</span>
+<span class="sd">    alpha : float</span>
+<span class="sd">        The degree of weighting decrease. Between 0.8 to 0.9 recommended.</span>
+<span class="sd">    dt : pandas.Timedelta</span>
+<span class="sd">        Unit time. Weights decrease exponentially at a rate of alpha per unit time.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ema</span> <span class="o">=</span> <span class="n">emaverage</span><span class="p">(</span><span class="n">xs</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">emaverage</span><span class="p">((</span><span class="n">xs</span> <span class="o">-</span> <span class="n">ema</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="infinite_trade_result"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.infinite_trade_result">[ドキュメント]</a><span class="k">def</span> <span class="nf">infinite_trade_result</span><span class="p">(</span>
+        <span class="n">low</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">low_base</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">high</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">high_base</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">f_time_to_sell</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">f_time_to_buy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return how much you can make profit if you buy a fixed amount of stock always when you should buy </span>
+<span class="sd">    and you sell a fixed amount of stock always when you should sell.</span>
+<span class="sd">    You sell some when low &gt; low_base and You buy some when high &lt; high_base.</span>
+<span class="sd">    Note that the logarithm should be taken for both low and high.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    low : pandas.Series</span>
+<span class="sd">        Contains logarithm of historical low price of the stock.</span>
+<span class="sd">    low_base : pandas.Series</span>
+<span class="sd">        Contains the criterion of sell timing.</span>
+<span class="sd">    high : pandas.Series, optional</span>
+<span class="sd">        Contains logarithm of historical high price of the stock. Will be overwritten by low when it&#39;s None.</span>
+<span class="sd">    high_base : pandas.Series, optional</span>
+<span class="sd">        Contains the criterion of buy timing. Will be overwritten by low_base when it&#39;s None.</span>
+<span class="sd">    f_time_to_sell : Optional[Callable[[pd.Series, pd.Series], pd.Series]], default (lambda low, low_base: low &gt; low_base)</span>
+<span class="sd">        Be called as f_time_to_sell(low, low_base) and returns when you should sell.</span>
+<span class="sd">    f_time_to_buy : Optional[Callable[[pd.Series, pd.Series], pd.Series]], default (lambda high, high_base: high &lt; high_base)</span>
+<span class="sd">        Be called as f_time_to_buy(high, high_base) and returns when you should buy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">high</span> <span class="o">=</span> <span class="n">high</span> <span class="k">if</span> <span class="n">high</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">low</span>
+    <span class="n">high_base</span> <span class="o">=</span> <span class="n">high_base</span> <span class="k">if</span> <span class="n">high_base</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">low_base</span>
+    
+    <span class="c1"># default: low price is bigger than expected</span>
+    <span class="n">f_time_to_sell</span> <span class="o">=</span> <span class="n">f_time_to_sell</span> <span class="k">if</span> <span class="n">f_time_to_sell</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">low</span><span class="p">,</span> <span class="n">low_base</span><span class="p">:</span> <span class="n">low</span> <span class="o">&gt;</span> <span class="n">low_base</span><span class="p">)</span>
+    <span class="c1"># default: high price is smaller than expected</span>
+    <span class="n">f_time_to_buy</span> <span class="o">=</span> <span class="n">f_time_to_buy</span> <span class="k">if</span> <span class="n">f_time_to_buy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">high</span><span class="p">,</span> <span class="n">high_base</span><span class="p">:</span> <span class="n">high</span> <span class="o">&lt;</span> <span class="n">high_base</span><span class="p">)</span>
+
+    <span class="n">time_to_sell</span> <span class="o">=</span> <span class="n">f_time_to_sell</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="n">low_base</span><span class="p">)</span>
+    <span class="n">time_to_buy</span> <span class="o">=</span> <span class="n">f_time_to_buy</span><span class="p">(</span><span class="n">high</span><span class="p">,</span> <span class="n">high_base</span><span class="p">)</span>
+
+    <span class="n">duplication</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">low</span><span class="p">[</span><span class="n">time_to_sell</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">)</span> <span class="o">&amp;</span> <span class="nb">set</span><span class="p">(</span><span class="n">high</span><span class="p">[</span><span class="n">time_to_buy</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">duplication</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="ne">UserWarning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;duplication detected on sell timings and buy timings&quot;</span><span class="p">))</span>
+
+    <span class="c1"># you sell a fixed amount when you should sell.</span>
+    <span class="n">sell</span> <span class="o">=</span> <span class="n">low</span><span class="p">[</span><span class="n">time_to_sell</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    
+    <span class="c1"># you buy a fixed amount when you should buy.</span>
+    <span class="n">buy</span> <span class="o">=</span> <span class="n">high</span><span class="p">[</span><span class="n">time_to_buy</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    
+    <span class="k">return</span> <span class="n">sell</span> <span class="o">-</span> <span class="n">buy</span></div>
+
+<div class="viewcode-block" id="sell_buy_timing_ratio"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.sell_buy_timing_ratio">[ドキュメント]</a><span class="k">def</span> <span class="nf">sell_buy_timing_ratio</span><span class="p">(</span>
+        <span class="n">low</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">low_base</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">high</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">high_base</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">f_time_to_sell</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">f_time_to_buy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the ratio of the sell timing counts to the buy timing counts.</span>
+<span class="sd">    Return numpy.nan when buy timing counts is 0 because you have no chance to buy the stock</span>
+<span class="sd">    and this indicator is completely meaningless. This indicator should be close to 1</span>
+<span class="sd">    because the risk of losing a lot of money or getting salted is reduced</span>
+<span class="sd">    if the chances of selling and buying are the same.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    low : pandas.Series</span>
+<span class="sd">        Contains logarithm of historical low price of the stock.</span>
+<span class="sd">    low_base : pandas.Series</span>
+<span class="sd">        Contains the criterion of sell timing.</span>
+<span class="sd">    high : pandas.Series, optional</span>
+<span class="sd">        Contains logarithm of historical high price of the stock. Will be overwritten by low when it&#39;s None.</span>
+<span class="sd">    high_base : pandas.Series, optional</span>
+<span class="sd">        Contains the criterion of buy timing. Will be overwritten by low_base when it&#39;s None.</span>
+<span class="sd">    f_time_to_sell : Optional[Callable[[pd.Series, pd.Series], pd.Series]], default (lambda low, low_base: low &gt; low_base)</span>
+<span class="sd">        Be called as f_time_to_sell(low, low_base) and returns when you should sell.</span>
+<span class="sd">    f_time_to_buy : Optional[Callable[[pd.Series, pd.Series], pd.Series]], default (lambda high, high_base: high &lt; high_base)</span>
+<span class="sd">        Be called as f_time_to_buy(high, high_base) and returns when you should buy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">high</span> <span class="o">=</span> <span class="n">high</span> <span class="k">if</span> <span class="n">high</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">low</span>
+    <span class="n">high_base</span> <span class="o">=</span> <span class="n">high_base</span> <span class="k">if</span> <span class="n">high_base</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">low_base</span>
+    
+    <span class="c1"># default: low price is bigger than expected</span>
+    <span class="n">f_time_to_sell</span> <span class="o">=</span> <span class="n">f_time_to_sell</span> <span class="k">if</span> <span class="n">f_time_to_sell</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">low</span><span class="p">,</span> <span class="n">low_base</span><span class="p">:</span> <span class="n">low</span> <span class="o">&gt;</span> <span class="n">low_base</span><span class="p">)</span>
+    <span class="c1"># default: high price is smaller than expected</span>
+    <span class="n">f_time_to_buy</span> <span class="o">=</span> <span class="n">f_time_to_buy</span> <span class="k">if</span> <span class="n">f_time_to_buy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">high</span><span class="p">,</span> <span class="n">high_base</span><span class="p">:</span> <span class="n">high</span> <span class="o">&lt;</span> <span class="n">high_base</span><span class="p">)</span>
+
+    <span class="n">time_to_sell</span> <span class="o">=</span> <span class="n">f_time_to_sell</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="n">low_base</span><span class="p">)</span>
+    <span class="n">time_to_buy</span> <span class="o">=</span> <span class="n">f_time_to_buy</span><span class="p">(</span><span class="n">high</span><span class="p">,</span> <span class="n">high_base</span><span class="p">)</span>
+
+    <span class="n">duplication</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">low</span><span class="p">[</span><span class="n">time_to_sell</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">)</span> <span class="o">&amp;</span> <span class="nb">set</span><span class="p">(</span><span class="n">high</span><span class="p">[</span><span class="n">time_to_buy</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">duplication</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="ne">UserWarning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;duplication detected on sell timings and buy timings&quot;</span><span class="p">))</span>
+    
+    <span class="n">sell_timing_count</span> <span class="o">=</span> <span class="n">time_to_sell</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="n">buy_timing_count</span> <span class="o">=</span> <span class="n">time_to_buy</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">buy_timing_count</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="k">return</span> <span class="n">sell_timing_count</span> <span class="o">/</span> <span class="n">buy_timing_count</span></div>
+
+<div class="viewcode-block" id="switch_count"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.switch_count">[ドキュメント]</a><span class="k">def</span> <span class="nf">switch_count</span><span class="p">(</span>
+        <span class="n">low</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">low_base</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">high</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">high_base</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">f_time_to_sell</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">f_time_to_buy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the number of times the time to sell and the time to buy have switched.</span>
+<span class="sd">    The higher this value, the more stock trading opportunities you have.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    low : pandas.Series</span>
+<span class="sd">        Contains logarithm of historical low price of the stock.</span>
+<span class="sd">    low_base : pandas.Series</span>
+<span class="sd">        Contains the criterion of sell timing.</span>
+<span class="sd">    high : pandas.Series, optional</span>
+<span class="sd">        Contains logarithm of historical high price of the stock. Will be overwritten by low when it&#39;s None.</span>
+<span class="sd">    high_base : pandas.Series, optional</span>
+<span class="sd">        Contains the criterion of buy timing. Will be overwritten by low_base when it&#39;s None.</span>
+<span class="sd">    f_time_to_sell : Optional[Callable[[pd.Series, pd.Series], pd.Series]], default (lambda low, low_base: low &gt; low_base)</span>
+<span class="sd">        Be called as f_time_to_sell(low, low_base) and returns when you should sell.</span>
+<span class="sd">    f_time_to_buy : Optional[Callable[[pd.Series, pd.Series], pd.Series]], default (lambda high, high_base: high &lt; high_base)</span>
+<span class="sd">        Be called as f_time_to_buy(high, high_base) and returns when you should buy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">high</span> <span class="o">=</span> <span class="n">high</span> <span class="k">if</span> <span class="n">high</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">low</span>
+    <span class="n">high_base</span> <span class="o">=</span> <span class="n">high_base</span> <span class="k">if</span> <span class="n">high_base</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">low_base</span>
+    
+    <span class="c1"># default: low price is bigger than expected</span>
+    <span class="n">f_time_to_sell</span> <span class="o">=</span> <span class="n">f_time_to_sell</span> <span class="k">if</span> <span class="n">f_time_to_sell</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">low</span><span class="p">,</span> <span class="n">low_base</span><span class="p">:</span> <span class="n">low</span> <span class="o">&gt;</span> <span class="n">low_base</span><span class="p">)</span>
+    <span class="c1"># default: high price is smaller than expected</span>
+    <span class="n">f_time_to_buy</span> <span class="o">=</span> <span class="n">f_time_to_buy</span> <span class="k">if</span> <span class="n">f_time_to_buy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="k">lambda</span> <span class="n">high</span><span class="p">,</span> <span class="n">high_base</span><span class="p">:</span> <span class="n">high</span> <span class="o">&lt;</span> <span class="n">high_base</span><span class="p">)</span>
+
+    <span class="n">time_to_sell</span> <span class="o">=</span> <span class="n">f_time_to_sell</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="n">low_base</span><span class="p">)</span>
+    <span class="n">time_to_buy</span> <span class="o">=</span> <span class="n">f_time_to_buy</span><span class="p">(</span><span class="n">high</span><span class="p">,</span> <span class="n">high_base</span><span class="p">)</span>
+    
+    <span class="n">duplication</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">low</span><span class="p">[</span><span class="n">time_to_sell</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">)</span> <span class="o">&amp;</span> <span class="nb">set</span><span class="p">(</span><span class="n">high</span><span class="p">[</span><span class="n">time_to_buy</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">duplication</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="ne">UserWarning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;duplication detected on sell timings and buy timings&quot;</span><span class="p">))</span>
+    
+    <span class="n">timings</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">low</span><span class="p">)),</span> <span class="n">index</span><span class="o">=</span><span class="n">low</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+    
+    <span class="c1"># sell timing may be a priority because you lose a lot of money if you miss the crash of the price</span>
+    <span class="n">timings</span><span class="p">[</span><span class="n">time_to_buy</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">timings</span><span class="p">[</span><span class="n">time_to_sell</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+    <span class="n">timings</span> <span class="o">=</span> <span class="n">timings</span><span class="p">[</span><span class="n">timings</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">]</span>
+    
+    <span class="n">count</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">timings</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">))</span>
+    
+    <span class="k">return</span> <span class="n">count</span></div>
+
+<div class="viewcode-block" id="switch_ratio"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.switch_ratio">[ドキュメント]</a><span class="k">def</span> <span class="nf">switch_ratio</span><span class="p">(</span>
+        <span class="n">low</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">low_base</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">high</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">high_base</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">f_time_to_sell</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">f_time_to_buy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the ratio of switch_count to (len(low) - 1) // 2.</span>
+<span class="sd">    The higher this value, the more stock trading opportunities you have.</span>
+<span class="sd">    This value is normalized to have a maximum value of 1 and is often more useful than switch_count.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    low : pandas.Series</span>
+<span class="sd">        Contains logarithm of historical low price of the stock.</span>
+<span class="sd">    low_base : pandas.Series</span>
+<span class="sd">        Contains the criterion of sell timing.</span>
+<span class="sd">    high : pandas.Series, optional</span>
+<span class="sd">        Contains logarithm of historical high price of the stock. Will be overwritten by low when it&#39;s None.</span>
+<span class="sd">    high_base : pandas.Series, optional</span>
+<span class="sd">        Contains the criterion of buy timing. Will be overwritten by low_base when it&#39;s None.</span>
+<span class="sd">    f_time_to_sell : Optional[Callable[[pd.Series, pd.Series], pd.Series]], default (lambda low, low_base: low &gt; low_base)</span>
+<span class="sd">        Be called as f_time_to_sell(low, low_base) and returns when you should sell.</span>
+<span class="sd">    f_time_to_buy : Optional[Callable[[pd.Series, pd.Series], pd.Series]], default (lambda high, high_base: high &lt; high_base)</span>
+<span class="sd">        Be called as f_time_to_buy(high, high_base) and returns when you should buy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">low</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">N</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="k">return</span> <span class="n">switch_count</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="n">low_base</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span> <span class="n">high_base</span><span class="p">,</span> <span class="n">f_time_to_sell</span><span class="p">,</span> <span class="n">f_time_to_buy</span><span class="p">)</span> <span class="o">/</span> <span class="n">N</span></div>
+
+<div class="viewcode-block" id="estimate_laplace_param"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.estimate_laplace_param">[ドキュメント]</a><span class="k">def</span> <span class="nf">estimate_laplace_param</span><span class="p">(</span><span class="n">xs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the maximum likelihood estimate of the parameters of Laplace distribution</span>
+<span class="sd">    assuming that the input follows to it.</span>
+<span class="sd">    First-order differences in currency price movements</span>
+<span class="sd">    tend to follow a Laplace distribution. Especially in the case of Bitcoin.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    xs : pandas.Series</span>
+<span class="sd">        Contains any real-valued data considered to follow the Laplace distribution.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">loc</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">median</span><span class="p">()</span>    
+    <span class="n">scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">xs</span> <span class="o">-</span> <span class="n">loc</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+    
+    <span class="k">return</span> <span class="n">loc</span><span class="p">,</span> <span class="n">scale</span></div>
+
+<div class="viewcode-block" id="estimate_brown_param"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.estimate_brown_param">[ドキュメント]</a><span class="k">def</span> <span class="nf">estimate_brown_param</span><span class="p">(</span><span class="n">xs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the scale parameter of Brownian motion assuming that the input follows to it.</span>
+<span class="sd">    Unit time is 1 second.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    xs : pandas.Series</span>
+<span class="sd">        Contains any real-valued data considered to follow the Brownian motion.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">estimate_laplace_param</span><span class="p">(</span><span class="n">xs</span><span class="p">)</span>
+
+    <span class="n">dt</span> <span class="o">=</span> <span class="n">delta</span><span class="p">(</span><span class="n">xs</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">scale</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="calc_brown_param"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.calc_brown_param">[ドキュメント]</a><span class="k">def</span> <span class="nf">calc_brown_param</span><span class="p">(</span><span class="n">scale</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">dt</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the variance of the Brownian motion at dt.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    scale : float</span>
+<span class="sd">        Any positive float value. Use estimate_brown_param to estimate this parameter.</span>
+<span class="sd">    dt : pandas.Timedelta</span>
+<span class="sd">        Any positive pandas.Timedelta.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">scale</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="estimate_probability"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.estimate_probability">[ドキュメント]</a><span class="k">def</span> <span class="nf">estimate_probability</span><span class="p">(</span>
+        <span class="n">xs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">window</span><span class="p">:</span> <span class="nb">int</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">loc</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">scale</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the probability that the input will occur,</span>
+<span class="sd">    assuming it follows a Laplace distribution with loc, scale as parameters.</span>
+<span class="sd">    Parameters of the Laplace distribution are estimated from xs if not specified.</span>
+<span class="sd">    By specifying a value greater than 1 for window, joint probability can be</span>
+<span class="sd">    taken into account and more robust estimation can be performed.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    xs : pd.Series</span>
+<span class="sd">        Contains any real-valued data considered to follow the Laplace distribution.</span>
+<span class="sd">    window: int, default 1</span>
+<span class="sd">        Size of the moving window. Recommends 3 to detect a spike or crash.</span>
+<span class="sd">    loc : float, optional</span>
+<span class="sd">        Location parameter of Laplace distribution.</span>
+<span class="sd">    scale : float, optional</span>
+<span class="sd">        Scale parameter of Laplace distribution.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dt</span> <span class="o">=</span> <span class="n">window</span> <span class="o">*</span> <span class="n">delta</span><span class="p">(</span><span class="n">xs</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">estimate_brown_param</span><span class="p">(</span><span class="n">xs</span><span class="p">)</span>
+    
+    <span class="n">ys</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">window</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    
+    <span class="n">loc</span> <span class="o">=</span> <span class="n">loc</span> <span class="k">if</span> <span class="n">loc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">ys</span><span class="o">.</span><span class="n">median</span><span class="p">()</span>
+    <span class="n">scale</span> <span class="o">=</span> <span class="n">scale</span> <span class="k">if</span> <span class="n">scale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">calc_brown_param</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span>
+    
+    <span class="n">ps</span> <span class="o">=</span> <span class="n">laplace</span><span class="o">.</span><span class="n">cdf</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">ys</span><span class="o">-</span><span class="n">loc</span><span class="p">),</span> <span class="n">loc</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">scale</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span>
+    
+    <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">ps</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">xs</span><span class="o">.</span><span class="n">index</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="analyze"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.analyze">[ドキュメント]</a><span class="k">def</span> <span class="nf">analyze</span><span class="p">(</span><span class="n">xs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return a dataframe of the input itself, the time difference</span>
+<span class="sd">    from the previous element, the logarithmic value, the log difference</span>
+<span class="sd">    from the previous element, and the probability that the input will occur.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    xs : pandas.Series</span>
+<span class="sd">        Contains historical price of the stock.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">xs</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="n">df</span><span class="p">[</span><span class="s1">&#39;dt&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">index</span> <span class="o">-</span> <span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    
+    <span class="n">df</span><span class="p">[</span><span class="n">xs</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">xs</span>
+    
+    <span class="n">df</span><span class="p">[</span><span class="s1">&#39;log&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">)</span>
+    <span class="n">df</span><span class="p">[</span><span class="s1">&#39;diff&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;log&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span>
+    <span class="n">df</span><span class="p">[</span><span class="s1">&#39;prob&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">estimate_probability</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;diff&#39;</span><span class="p">])</span>
+    
+    <span class="k">return</span> <span class="n">df</span></div>
+
+<div class="viewcode-block" id="plot_laplace"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.analysis.plot_laplace">[ドキュメント]</a><span class="k">def</span> <span class="nf">plot_laplace</span><span class="p">(</span><span class="n">xs</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Plot the fitted result assuming that the input follows a Laplace distribution.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    xs : pandas.Series</span>
+<span class="sd">        Contains any real-valued data considered to follow the Laplace distribution.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">loc</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">estimate_laplace_param</span><span class="p">(</span><span class="n">xs</span><span class="p">)</span>
+    
+    <span class="n">vs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="n">scale</span><span class="o">*</span><span class="mi">10</span><span class="p">,</span> <span class="n">scale</span><span class="o">*</span><span class="mi">10</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+    <span class="n">ys</span> <span class="o">=</span> <span class="n">laplace</span><span class="o">.</span><span class="n">pdf</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">loc</span><span class="p">,</span> <span class="n">scale</span><span class="p">)</span>
+    <span class="n">bins</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">xs</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="n">vs</span><span class="p">)</span>
+
+    <span class="n">a</span> <span class="o">=</span> <span class="n">bins</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">/</span> <span class="n">ys</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">vs</span><span class="p">,</span> <span class="n">ys</span> <span class="o">*</span> <span class="n">a</span><span class="p">)</span>
+    
+    <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">クイック検索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="検索" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.analysis</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2022, Josh Nobus.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.1.1.
+    </div>
+  </body>
+</html>

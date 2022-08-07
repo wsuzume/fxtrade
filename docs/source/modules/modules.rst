@@ -1,0 +1,7 @@
+fxtrade
+=======
+
+.. toctree::
+   :maxdepth: 4
+
+   fxtrade

@@ -1,0 +1,462 @@
+
+
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fxtrade.stock &#8212; fxtrade 0.0.6 ドキュメント</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bizstyle.css" />
+    
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/translations.js"></script>
+    <script src="../../_static/bizstyle.js"></script>
+    <link rel="index" title="索引" href="../../genindex.html" />
+    <link rel="search" title="検索" href="../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.stock</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>fxtrade.stock のソースコード</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot; Deals with stocks and operations on them.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">fractions</span> <span class="kn">import</span> <span class="n">Fraction</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="n">_FLOAT_PRECISE_DIGIT_NUMBER</span> <span class="o">=</span> <span class="mi">6</span>
+
+<span class="n">Numeric</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="n">Fraction</span><span class="p">]</span>
+
+<div class="viewcode-block" id="can_be_precise_num"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.can_be_precise_num">[ドキュメント]</a><span class="k">def</span> <span class="nf">can_be_precise_num</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return whether the value can be calculated with precision.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="c1"># +1 is for point</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">_FLOAT_PRECISE_DIGIT_NUMBER</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="ne">UserWarning</span><span class="p">(</span>
+            <span class="s2">&quot;using float and the number of digits may be too large: &quot;</span> <span class="o">+</span> \
+            <span class="s2">&quot;the accuracy of the calculation may be lost. use str, int, &quot;</span> <span class="o">+</span> \
+            <span class="s2">&quot;or fractions.Fraction instead.&quot;</span><span class="p">))</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    
+    <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Fraction</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="as_numeric"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.as_numeric">[ドキュメント]</a><span class="k">def</span> <span class="nf">as_numeric</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert numbers to fractions.Fraction for accuracy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">x</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">can_be_precise_num</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;x must be type of str, int, float, or fractions.Fraction&quot;</span><span class="p">)</span>
+    
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">x</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Fraction</span><span class="p">)</span> <span class="k">else</span> <span class="n">Fraction</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Stock"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock">[ドキュメント]</a><span class="k">class</span> <span class="nc">Stock</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Stock consists from code and quantity.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="Stock.__init__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__init__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">q</span><span class="p">:</span> <span class="n">Numeric</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        code : str</span>
+<span class="sd">            Product code or name of the stock.</span>
+<span class="sd">        q : Numeric</span>
+<span class="sd">            Quantity of the stock.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;code must be type of str&quot;</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_code</span> <span class="o">=</span> <span class="n">code</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_q</span> <span class="o">=</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">q</span><span class="p">)</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">code</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return its code.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_code</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">q</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Fraction</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return its quantity.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_q</span>
+    
+<div class="viewcode-block" id="Stock.floor"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.floor">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">floor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="o">=</span><span class="mi">6</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return floor at the specified digit.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        n : int, default 6</span>
+<span class="sd">            Specify the n-th decimal place. Must be non-negative number.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="mi">10</span> <span class="o">**</span> <span class="n">n</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">q</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span><span class="p">)</span> <span class="o">/</span> <span class="n">p</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Stock.ceil"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.ceil">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">ceil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return ceil at the specified digit.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        n : int, default 0</span>
+<span class="sd">            Specify the n-th decimal place. Must be non-negative number.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="mi">10</span> <span class="o">**</span> <span class="n">n</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">q</span><span class="p">)</span> <span class="o">*</span> <span class="n">p</span><span class="p">)</span> <span class="o">/</span> <span class="n">p</span><span class="p">))</span></div>
+    
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Stock(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">q</span><span class="si">}</span><span class="s2">)&quot;</span>
+    
+    <span class="k">def</span> <span class="nf">_is_same_stock</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Stock</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">code</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">code</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;operation undefined between </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">other</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    
+    <span class="k">def</span> <span class="nf">_is_numeric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Fraction</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;other must be instance of fractions.Fraction&quot;</span><span class="p">)</span>
+    
+<div class="viewcode-block" id="Stock.__abs__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__abs__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__abs__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return absolute of the stock.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">q</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Stock.__pos__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__pos__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__pos__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return positive of the stock.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">q</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Stock.__neg__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__neg__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__neg__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return negative of the stock.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">q</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Stock.__lt__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__lt__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compare the stocks if the codes are the same.</span>
+<span class="sd">        Else try to compare the stock quantity with the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same_stock</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">&lt;</span> <span class="n">other</span><span class="o">.</span><span class="n">q</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">&lt;</span> <span class="n">other</span></div>
+        
+<div class="viewcode-block" id="Stock.__le__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__le__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__le__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compare the stocks if the codes are the same.</span>
+<span class="sd">        Else try to compare the stock quantity with the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same_stock</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">&lt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">q</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">&lt;=</span> <span class="n">other</span></div>
+    
+<div class="viewcode-block" id="Stock.__eq__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__eq__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compare the stocks if the codes are the same.</span>
+<span class="sd">        Else try to compare the stock quantity with the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same_stock</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">q</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">==</span> <span class="n">other</span></div>
+    
+<div class="viewcode-block" id="Stock.__ne__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__ne__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compare the stocks if the codes are the same.</span>
+<span class="sd">        Else try to compare the stock quantity with the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same_stock</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">q</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">!=</span> <span class="n">other</span></div>
+    
+<div class="viewcode-block" id="Stock.__gt__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__gt__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__gt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compare the stocks if the codes are the same.</span>
+<span class="sd">        Else try to compare the stock quantity with the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same_stock</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">&gt;</span> <span class="n">other</span><span class="o">.</span><span class="n">q</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">&gt;</span> <span class="n">other</span></div>
+    
+<div class="viewcode-block" id="Stock.__ge__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__ge__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__ge__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compare the stocks if the codes are the same.</span>
+<span class="sd">        Else try to compare the stock quantity with the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same_stock</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">&gt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">q</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">&gt;=</span> <span class="n">other</span></div>
+    
+<div class="viewcode-block" id="Stock.__add__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__add__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return sum of the stocks if the codes are the same.</span>
+<span class="sd">        If the other is not instance of Stock, try to add the other to the stock quantity.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same_stock</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">q</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">+</span> <span class="n">other</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Stock.__radd__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__radd__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__radd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to add the other to the stock quantity.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">+</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Stock.__sub__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__sub__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__sub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return difference between the stocks if the codes are the same.</span>
+<span class="sd">        If the other is not instance of Stock, try to subtract the other from the stock quantity.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_same_stock</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">-</span> <span class="n">other</span><span class="o">.</span><span class="n">q</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">-</span> <span class="n">other</span><span class="p">)</span></div>
+        
+<div class="viewcode-block" id="Stock.__rsub__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__rsub__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__rsub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to subtract the stock quantity from the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Stock.__mul__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__mul__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to multiply the other to the stock if the other is instance of Rate.</span>
+<span class="sd">        Else try to multiply the other to the stock quantity.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Rate</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">other</span> <span class="o">*</span> <span class="bp">self</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">*</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Stock.__rmul__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__rmul__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__rmul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to multiply the other to the stock quantity.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">*</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Stock.__truediv__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__truediv__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__truediv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to multiply inverse of the other to the stock if the other is instance of Rate.</span>
+<span class="sd">        Else try to divide the stock quantity by other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Rate</span><span class="p">):</span>
+            <span class="k">return</span> <span class="o">~</span><span class="n">other</span> <span class="o">*</span> <span class="bp">self</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">/</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Stock.__floordiv__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__floordiv__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__floordiv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to divide the stock quantity by the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">//</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Stock.__mod__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__mod__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__mod__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to return the remainder of the stock quantity divided by the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">%</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Stock.__pow__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Stock.__pow__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__pow__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">modulo</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to return the stock powered by the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="nb">pow</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">q</span><span class="p">,</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">),</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">modulo</span><span class="p">)))</span></div></div>
+
+<div class="viewcode-block" id="Rate"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate">[ドキュメント]</a><span class="k">class</span> <span class="nc">Rate</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Deal with the trading rate of the stock. </span>
+<span class="sd">    Since the concept of large/small of rate is determined by</span>
+<span class="sd">    the from_code and the to_code relatively,</span>
+<span class="sd">    a large/small comparison is not supported.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="Rate.from_stocks"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate.from_stocks">[ドキュメント]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_stocks</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">before</span><span class="p">:</span> <span class="n">Stock</span><span class="p">,</span> <span class="n">after</span><span class="p">:</span> <span class="n">Stock</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the rate at which A is converted to B.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">before</span><span class="p">,</span> <span class="n">Stock</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">after</span><span class="p">,</span> <span class="n">Stock</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;both before and after must be type of Stock&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Rate</span><span class="p">(</span><span class="n">before</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="n">after</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="n">after</span><span class="o">.</span><span class="n">q</span> <span class="o">/</span> <span class="n">before</span><span class="o">.</span><span class="n">q</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Rate.__init__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate.__init__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">from_code</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">to_code</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">r</span><span class="p">:</span> <span class="n">Numeric</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        from_code : str</span>
+<span class="sd">            Product code before conversion.</span>
+<span class="sd">        to_code : str</span>
+<span class="sd">            Product code after conversion.</span>
+<span class="sd">        r : Numeric</span>
+<span class="sd">            Conversion rate.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">from_code</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;from_code must be type of str&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">to_code</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;to_code must be type of str&quot;</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_from_code</span> <span class="o">=</span> <span class="n">from_code</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_to_code</span> <span class="o">=</span> <span class="n">to_code</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_r</span> <span class="o">=</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">r</span><span class="p">)</span></div>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">from_code</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Product code before conversion.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_from_code</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">to_code</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Product code after conversion.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_code</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">r</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Conversion rate.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_r</span>
+    
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Rate(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">from_code</span><span class="si">}</span><span class="s2">-&gt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">to_code</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+    
+<div class="viewcode-block" id="Rate.__invert__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate.__invert__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__invert__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Swap from_code and to_code, and take the reciprocal for r.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Rate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_code</span><span class="p">,</span> <span class="mi">1</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="p">)</span></div>
+    
+    <span class="k">def</span> <span class="nf">_is_chainable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Rate</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_code</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">from_code</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Stock</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">from_code</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">code</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    
+<div class="viewcode-block" id="Rate.__eq__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate.__eq__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;True iff from_code, to_code, and r are all the same.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Rate</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;comparison undefined between Rate and </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">from_code</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">from_code</span><span class="p">)</span> \
+            <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_code</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">to_code</span><span class="p">)</span> \
+            <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">r</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        
+        <span class="k">return</span> <span class="kc">False</span></div>
+    
+<div class="viewcode-block" id="Rate.__ne__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate.__ne__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__ne__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Inverse of __eq__.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="p">(</span><span class="bp">self</span> <span class="o">==</span> <span class="n">other</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Rate.__mul__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate.__mul__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to chain the other if it is instance of Rate.</span>
+<span class="sd">        Else if the other is instance of Stock, try to convert with the rate.</span>
+<span class="sd">        Else try to multiply the other to r.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Rate</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_chainable</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cannot be chained </span><span class="si">{</span><span class="bp">self</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">other</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">Rate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">from_code</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">to_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">r</span> <span class="o">*</span> <span class="n">other</span><span class="o">.</span><span class="n">r</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Stock</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_chainable</span><span class="p">(</span><span class="n">other</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cannot be chained </span><span class="si">{</span><span class="bp">self</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">other</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">Stock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">r</span> <span class="o">*</span> <span class="n">other</span><span class="o">.</span><span class="n">q</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">Rate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">from_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">r</span> <span class="o">*</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Rate.__rmul__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate.__rmul__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__rmul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Try to multiply the other to r.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Rate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">from_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">r</span> <span class="o">*</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">))</span></div>
+    
+<div class="viewcode-block" id="Rate.__truediv__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate.__truediv__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__truediv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to chain the ~other if it is instance of Rate.</span>
+<span class="sd">        Else try to devide r by the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Rate</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span> <span class="o">*</span> <span class="o">~</span><span class="n">other</span>
+        
+        <span class="k">return</span> <span class="n">Rate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">from_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">r</span> <span class="o">/</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">))</span></div>
+    
+    <span class="k">def</span> <span class="fm">__rtruediv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to multiply the other to ~self.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">)</span> <span class="o">*</span> <span class="o">~</span><span class="bp">self</span>
+    
+<div class="viewcode-block" id="Rate.__pow__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.stock.Rate.__pow__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__pow__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">modulo</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to be powered by the other.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">from_code</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_code</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;from_code and to_code must be the same but now </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">from_code</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">to_code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Rate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">from_code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_code</span><span class="p">,</span> <span class="nb">pow</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="p">,</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">other</span><span class="p">),</span> <span class="n">as_numeric</span><span class="p">(</span><span class="n">modulo</span><span class="p">)))</span></div></div>
+
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">クイック検索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="検索" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.stock</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2022, Josh Nobus.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.1.1.
+    </div>
+  </body>
+</html>

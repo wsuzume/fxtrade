@@ -1,0 +1,423 @@
+
+
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fxtrade.interface.bitflyer &#8212; fxtrade 0.0.6 ドキュメント</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/bizstyle.css" />
+    
+    <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/translations.js"></script>
+    <script src="../../../_static/bizstyle.js"></script>
+    <link rel="index" title="索引" href="../../../genindex.html" />
+    <link rel="search" title="検索" href="../../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="総合索引"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.interface.bitflyer</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>fxtrade.interface.bitflyer のソースコード</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">glob</span> <span class="kn">import</span> <span class="n">glob</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span> <span class="nn">hashlib</span>
+<span class="kn">import</span> <span class="nn">hmac</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">urllib.parse</span> <span class="kn">import</span> <span class="n">urljoin</span>
+
+<span class="kn">from</span> <span class="nn">fractions</span> <span class="kn">import</span> <span class="n">Fraction</span>
+
+<span class="kn">from</span> <span class="nn">requests.exceptions</span> <span class="kn">import</span> <span class="n">RequestException</span>
+
+<span class="kn">from</span> <span class="nn">..api</span> <span class="kn">import</span> <span class="n">TradeAPI</span>
+<span class="kn">from</span> <span class="nn">..trade</span> <span class="kn">import</span> <span class="n">Transfer</span><span class="p">,</span> <span class="n">Trade</span><span class="p">,</span> <span class="n">History</span>
+<span class="kn">from</span> <span class="nn">..stock</span> <span class="kn">import</span> <span class="n">Stock</span><span class="p">,</span> <span class="n">Rate</span>
+<span class="kn">from</span> <span class="nn">..stocks</span> <span class="kn">import</span> <span class="n">JPY</span><span class="p">,</span> <span class="n">BTC</span>
+<span class="kn">from</span> <span class="nn">..wallet</span> <span class="kn">import</span> <span class="n">Wallet</span>
+
+<div class="viewcode-block" id="build_headers"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.build_headers">[ドキュメント]</a><span class="k">def</span> <span class="nf">build_headers</span><span class="p">(</span><span class="n">api_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">api_secret</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">timestamp</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">())</span>
+    
+    <span class="k">if</span> <span class="n">body</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="n">timestamp</span> <span class="o">+</span> <span class="n">method</span> <span class="o">+</span> <span class="n">endpoint</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="n">timestamp</span> <span class="o">+</span> <span class="n">method</span> <span class="o">+</span> <span class="n">endpoint</span> <span class="o">+</span> <span class="n">body</span>
+        
+    <span class="n">signature</span> <span class="o">=</span> <span class="n">hmac</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">api_secret</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span> <span class="n">message</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">),</span>
+                         <span class="n">digestmod</span><span class="o">=</span><span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+    
+    <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;Content-Type&#39;</span><span class="p">:</span> <span class="s1">&#39;application/json&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ACCESS-KEY&#39;</span><span class="p">:</span> <span class="n">api_key</span><span class="p">,</span>
+        <span class="s1">&#39;ACCESS-TIMESTAMP&#39;</span><span class="p">:</span> <span class="n">timestamp</span><span class="p">,</span>
+        <span class="s1">&#39;ACCESS-SIGN&#39;</span><span class="p">:</span> <span class="n">signature</span>
+    <span class="p">}</span>
+    
+    <span class="k">return</span> <span class="n">headers</span></div>
+
+<div class="viewcode-block" id="query_string"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.query_string">[ドキュメント]</a><span class="k">def</span> <span class="nf">query_string</span><span class="p">(</span><span class="n">params</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s1">&#39;&amp;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;=&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">params</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="p">])</span></div>
+
+<div class="viewcode-block" id="send_request"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.send_request">[ドキュメント]</a><span class="k">def</span> <span class="nf">send_request</span><span class="p">(</span><span class="n">base_url</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;GET&#39;</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">api_key</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">api_secret</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="n">urljoin</span><span class="p">(</span><span class="n">base_url</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">)</span>
+    
+    <span class="n">func</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;GET&#39;</span><span class="p">:</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">,</span>
+        <span class="s1">&#39;POST&#39;</span><span class="p">:</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">,</span>
+    <span class="p">}</span>
+    
+    <span class="k">if</span> <span class="n">params</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">endpoint</span> <span class="o">=</span> <span class="n">endpoint</span> <span class="o">+</span> <span class="s1">&#39;?&#39;</span> <span class="o">+</span> <span class="n">query_string</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">api_key</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">func</span><span class="p">[</span><span class="n">method</span><span class="p">](</span><span class="n">url</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">body</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">headers</span> <span class="o">=</span> <span class="n">build_headers</span><span class="p">(</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="n">endpoint</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">func</span><span class="p">[</span><span class="n">method</span><span class="p">](</span><span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">body</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="get_balance"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.get_balance">[ドキュメント]</a><span class="k">def</span> <span class="nf">get_balance</span><span class="p">(</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="p">):</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;https://api.bitflyer.com&#39;</span>
+    <span class="n">endpoint</span> <span class="o">=</span> <span class="s1">&#39;/v1/me/getbalance&#39;</span>
+    
+    <span class="k">return</span> <span class="n">send_request</span><span class="p">(</span><span class="n">base_url</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;GET&#39;</span><span class="p">,</span> <span class="n">api_key</span><span class="o">=</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="o">=</span><span class="n">api_secret</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="get_balance_history"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.get_balance_history">[ドキュメント]</a><span class="k">def</span> <span class="nf">get_balance_history</span><span class="p">(</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="p">,</span> <span class="n">currency_code</span><span class="o">=</span><span class="s1">&#39;JPY&#39;</span><span class="p">):</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;https://api.bitflyer.com&#39;</span>
+    <span class="n">endpoint</span> <span class="o">=</span> <span class="s1">&#39;/v1/me/getbalancehistory&#39;</span>
+    
+    <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;currency_code&quot;</span><span class="p">:</span> <span class="n">currency_code</span><span class="p">,</span>
+        <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">send_request</span><span class="p">(</span><span class="n">base_url</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;GET&#39;</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">,</span> <span class="n">api_key</span><span class="o">=</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="o">=</span><span class="n">api_secret</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="get_ticker"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.get_ticker">[ドキュメント]</a><span class="k">def</span> <span class="nf">get_ticker</span><span class="p">(</span><span class="n">product_code</span><span class="o">=</span><span class="s1">&#39;btc_jpy&#39;</span><span class="p">):</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;https://api.bitflyer.com&#39;</span>
+    <span class="n">endpoint</span> <span class="o">=</span> <span class="s1">&#39;/v1/ticker&#39;</span>
+    
+    <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;product_code&quot;</span><span class="p">:</span> <span class="n">product_code</span><span class="p">,</span>
+    <span class="p">}</span>
+    
+    <span class="k">return</span> <span class="n">send_request</span><span class="p">(</span><span class="n">base_url</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="get_commission"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.get_commission">[ドキュメント]</a><span class="k">def</span> <span class="nf">get_commission</span><span class="p">(</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="p">,</span> <span class="n">product_code</span><span class="p">):</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;https://api.bitflyer.com&#39;</span>
+    <span class="n">endpoint</span> <span class="o">=</span> <span class="s1">&#39;/v1/me/gettradingcommission&#39;</span>
+    
+    <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;product_code&quot;</span><span class="p">:</span> <span class="n">product_code</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">send_request</span><span class="p">(</span><span class="n">base_url</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;GET&#39;</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">,</span> <span class="n">api_key</span><span class="o">=</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="o">=</span><span class="n">api_secret</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="get_child_orders"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.get_child_orders">[ドキュメント]</a><span class="k">def</span> <span class="nf">get_child_orders</span><span class="p">(</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="p">,</span> <span class="n">product_code</span><span class="o">=</span><span class="s1">&#39;btc_jpy&#39;</span><span class="p">):</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;https://api.bitflyer.com&#39;</span>
+    <span class="n">endpoint</span> <span class="o">=</span> <span class="s1">&#39;/v1/me/getchildorders&#39;</span>
+    
+    <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;product_code&quot;</span><span class="p">:</span> <span class="n">product_code</span><span class="p">,</span>
+        <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">send_request</span><span class="p">(</span><span class="n">base_url</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;GET&#39;</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">,</span> <span class="n">api_key</span><span class="o">=</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="o">=</span><span class="n">api_secret</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="order"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.order">[ドキュメント]</a><span class="k">def</span> <span class="nf">order</span><span class="p">(</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="p">,</span> <span class="n">side</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">order_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">price</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">expire</span><span class="p">:</span> <span class="nb">int</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">side</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span> <span class="s1">&#39;BUY&#39;</span><span class="p">,</span> <span class="s1">&#39;SELL&#39;</span> <span class="p">}:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">order_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span> <span class="s1">&#39;LIMIT&#39;</span><span class="p">,</span> <span class="s1">&#39;MARKET&#39;</span> <span class="p">}:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+    
+    <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;https://api.bitflyer.com&#39;</span>
+    <span class="n">endpoint</span> <span class="o">=</span> <span class="s2">&quot;/v1/me/sendchildorder&quot;</span>
+    
+    <span class="n">body</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;product_code&quot;</span><span class="p">:</span> <span class="s1">&#39;btc_jpy&#39;</span><span class="p">,</span>  <span class="c1"># ビットコイン（日本円）</span>
+        <span class="s2">&quot;child_order_type&quot;</span><span class="p">:</span> <span class="n">order_type</span><span class="p">,</span>  <span class="c1"># 指値。成行きの場合は、MARKET</span>
+        <span class="s2">&quot;side&quot;</span><span class="p">:</span> <span class="n">side</span><span class="p">,</span>  <span class="c1"># 「買い」注文</span>
+        <span class="c1">#&quot;price&quot;: price,  # 価格指定</span>
+        <span class="s2">&quot;size&quot;</span><span class="p">:</span> <span class="n">size</span><span class="p">,</span>  <span class="c1"># 注文数量</span>
+        <span class="s2">&quot;minute_to_expire&quot;</span><span class="p">:</span> <span class="n">expire</span><span class="p">,</span>  <span class="c1"># 期限切れまでの時間（分）</span>
+        <span class="s2">&quot;time_in_force&quot;</span><span class="p">:</span> <span class="s1">&#39;GTC&#39;</span>  <span class="c1"># GTC発注</span>
+    <span class="p">}</span>
+
+    <span class="n">body</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">send_request</span><span class="p">(</span><span class="n">base_url</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;POST&#39;</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">,</span> <span class="n">api_key</span><span class="o">=</span><span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="o">=</span><span class="n">api_secret</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="order_cancel"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.order_cancel">[ドキュメント]</a><span class="k">def</span> <span class="nf">order_cancel</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;https://api.bitflyer.com&#39;</span>
+    <span class="n">endpoint</span> <span class="o">=</span> <span class="s2">&quot;/v1/me/cancelchildorder&quot;</span>
+
+    <span class="n">body</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;product_code&quot;</span><span class="p">:</span> <span class="s1">&#39;btc_jpy&#39;</span><span class="p">,</span>
+        <span class="s2">&quot;child_order_acceptance_id&quot;</span><span class="p">:</span> <span class="s2">&quot;JRF20150707-033333-099999&quot;</span>
+    <span class="p">}</span>
+
+    <span class="n">body</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+    <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">header</span><span class="p">(</span><span class="s1">&#39;POST&#39;</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="n">endpoint</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">)</span>
+
+    <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">base_url</span> <span class="o">+</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">body</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span></div>
+
+<div class="viewcode-block" id="all_order_cancel"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.all_order_cancel">[ドキュメント]</a><span class="k">def</span> <span class="nf">all_order_cancel</span><span class="p">():</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="s1">&#39;https://api.bitflyer.com&#39;</span>
+    <span class="n">endpoint</span> <span class="o">=</span> <span class="s2">&quot;/v1/me/cancelallchildorders&quot;</span>
+
+    <span class="n">body</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;product_code&quot;</span><span class="p">:</span> <span class="s1">&#39;btc_jpy&#39;</span>
+    <span class="p">}</span>
+
+    <span class="n">body</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+    <span class="n">headers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">header</span><span class="p">(</span><span class="s1">&#39;POST&#39;</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="n">endpoint</span><span class="p">,</span> <span class="n">body</span><span class="o">=</span><span class="n">body</span><span class="p">)</span>
+
+    <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">base_url</span> <span class="o">+</span> <span class="n">endpoint</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">body</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span></div>
+
+<div class="viewcode-block" id="cashflow_to_history"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.cashflow_to_history">[ドキュメント]</a><span class="k">def</span> <span class="nf">cashflow_to_history</span><span class="p">(</span><span class="n">df</span><span class="p">):</span>
+    <span class="n">df_buy</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;trade_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;BUY&#39;</span><span class="p">]</span>
+    <span class="n">df_sell</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;trade_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;SELL&#39;</span><span class="p">]</span>
+    
+    <span class="n">buy_his</span> <span class="o">=</span> <span class="n">df_buy</span><span class="p">[[</span><span class="s1">&#39;trade_date&#39;</span><span class="p">,</span> <span class="s1">&#39;order_id&#39;</span><span class="p">,</span> <span class="s1">&#39;code_x&#39;</span><span class="p">,</span> <span class="s1">&#39;X(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;code_y&#39;</span><span class="p">,</span> <span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">buy_his</span><span class="p">[</span><span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">buy_his</span><span class="p">[</span><span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">]</span> <span class="o">/</span> <span class="n">buy_his</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span>
+    <span class="n">buy_his</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;t&#39;</span><span class="p">,</span> <span class="s1">&#39;order_id&#39;</span><span class="p">,</span> <span class="s1">&#39;from&#39;</span><span class="p">,</span> <span class="s1">&#39;X(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;to&#39;</span><span class="p">,</span> <span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">,</span> <span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">]</span>
+    
+    <span class="n">sell_his</span> <span class="o">=</span> <span class="n">df_sell</span><span class="p">[[</span><span class="s1">&#39;trade_date&#39;</span><span class="p">,</span> <span class="s1">&#39;order_id&#39;</span><span class="p">,</span> <span class="s1">&#39;code_y&#39;</span><span class="p">,</span> <span class="s1">&#39;Y(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;code_x&#39;</span><span class="p">,</span> <span class="s1">&#39;X(t+dt)&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">sell_his</span><span class="p">[</span><span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sell_his</span><span class="p">[</span><span class="s1">&#39;X(t+dt)&#39;</span><span class="p">]</span> <span class="o">/</span> <span class="n">sell_his</span><span class="p">[</span><span class="s1">&#39;Y(t)&#39;</span><span class="p">]</span>
+    <span class="n">sell_his</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;t&#39;</span><span class="p">,</span> <span class="s1">&#39;order_id&#39;</span><span class="p">,</span> <span class="s1">&#39;from&#39;</span><span class="p">,</span> <span class="s1">&#39;X(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;to&#39;</span><span class="p">,</span> <span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">,</span> <span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">]</span>
+    
+    <span class="n">ret</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">buy_his</span><span class="p">,</span> <span class="n">sell_his</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s1">&#39;t&#39;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">History</span><span class="o">.</span><span class="n">from_dataframe</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="BitflyerAPI"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI">[ドキュメント]</a><span class="k">class</span> <span class="nc">BitflyerAPI</span><span class="p">(</span><span class="n">TradeAPI</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">api_key</span> <span class="o">=</span> <span class="n">api_key</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">api_secret</span> <span class="o">=</span> <span class="n">api_secret</span>
+    
+<div class="viewcode-block" id="BitflyerAPI.minimum_order_quantity"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.minimum_order_quantity">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">minimum_order_quantity</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="n">qs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;BTC&#39;</span><span class="p">:</span> <span class="n">BTC</span><span class="p">(</span><span class="s1">&#39;0.001&#39;</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">qs</span><span class="p">[</span><span class="n">code</span><span class="p">]</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.maximum_order_quantity"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.maximum_order_quantity">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">maximum_order_quantity</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="n">qs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;BTC&#39;</span><span class="p">:</span> <span class="n">BTC</span><span class="p">(</span><span class="s1">&#39;1000&#39;</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">qs</span><span class="p">[</span><span class="n">code</span><span class="p">]</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.get_commission"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.get_commission">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">get_commission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">product_code</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">product_code</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">product_code</span> <span class="o">=</span> <span class="s1">&#39;BTC_JPY&#39;</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">get_commission</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">api_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">api_secret</span><span class="p">,</span> <span class="n">product_code</span><span class="p">)</span>
+            <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="kc">None</span>
+            
+        <span class="n">resp</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+        
+        <span class="k">return</span> <span class="n">Fraction</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">resp</span><span class="p">[</span><span class="s1">&#39;commission_rate&#39;</span><span class="p">]))</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.get_ticker"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.get_ticker">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">get_ticker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">code</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">code</span> <span class="o">=</span> <span class="s1">&#39;btc_jpy&#39;</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">get_ticker</span><span class="p">(</span><span class="n">product_code</span><span class="o">=</span><span class="n">code</span><span class="p">)</span>
+            <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="kc">None</span>
+        
+        <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.get_best_bid"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.get_best_bid">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">get_best_bid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="n">ticker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_ticker</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="n">code</span><span class="p">)</span>
+        
+        <span class="c1"># 買い値</span>
+        <span class="n">bid_rate</span> <span class="o">=</span> <span class="n">Rate</span><span class="p">(</span><span class="n">from_code</span><span class="o">=</span><span class="s1">&#39;BTC&#39;</span><span class="p">,</span> <span class="n">to_code</span><span class="o">=</span><span class="s1">&#39;JPY&#39;</span><span class="p">,</span> <span class="n">r</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">ticker</span><span class="p">[</span><span class="s1">&#39;best_bid&#39;</span><span class="p">]))</span>
+        
+        <span class="k">return</span> <span class="n">bid_rate</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.get_best_ask"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.get_best_ask">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">get_best_ask</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="n">ticker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_ticker</span><span class="p">(</span><span class="n">code</span><span class="o">=</span><span class="n">code</span><span class="p">)</span>
+
+        <span class="c1"># 売り値</span>
+        <span class="n">ask_rate</span> <span class="o">=</span> <span class="n">Rate</span><span class="p">(</span><span class="n">from_code</span><span class="o">=</span><span class="s1">&#39;BTC&#39;</span><span class="p">,</span> <span class="n">to_code</span><span class="o">=</span><span class="s1">&#39;JPY&#39;</span><span class="p">,</span> <span class="n">r</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">ticker</span><span class="p">[</span><span class="s1">&#39;best_ask&#39;</span><span class="p">]))</span>
+        
+        <span class="k">return</span> <span class="n">ask_rate</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.get_balance"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.get_balance">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">get_balance</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">get_balance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">api_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">api_secret</span><span class="p">)</span>
+            <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="kc">None</span>
+            
+        <span class="n">stocks</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+        
+        <span class="n">w</span> <span class="o">=</span> <span class="n">Wallet</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">stock</span> <span class="ow">in</span> <span class="n">stocks</span><span class="p">:</span>
+            <span class="n">w</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">Stock</span><span class="p">(</span><span class="n">stock</span><span class="p">[</span><span class="s1">&#39;currency_code&#39;</span><span class="p">],</span> <span class="nb">str</span><span class="p">(</span><span class="n">stock</span><span class="p">[</span><span class="s1">&#39;available&#39;</span><span class="p">])))</span>
+        <span class="k">return</span> <span class="n">w</span></div>
+        
+<div class="viewcode-block" id="BitflyerAPI.get_balance_history"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.get_balance_history">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">get_balance_history</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">currency_code</span><span class="o">=</span><span class="s1">&#39;JPY&#39;</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">get_balance_history</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">api_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">api_secret</span><span class="p">,</span> <span class="n">currency_code</span><span class="o">=</span><span class="n">currency_code</span><span class="p">)</span>
+            <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.get_cashflow"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.get_cashflow">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">get_cashflow</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start_date</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">df_jpy</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_balance_history</span><span class="p">(</span><span class="n">currency_code</span><span class="o">=</span><span class="s1">&#39;JPY&#39;</span><span class="p">))</span>
+        <span class="n">df_btc</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_balance_history</span><span class="p">(</span><span class="n">currency_code</span><span class="o">=</span><span class="s1">&#39;BTC&#39;</span><span class="p">))</span>
+        
+        <span class="n">meta_columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;order_id&#39;</span><span class="p">,</span> <span class="s1">&#39;trade_date&#39;</span><span class="p">,</span> <span class="s1">&#39;product_code&#39;</span><span class="p">,</span> <span class="s1">&#39;trade_type&#39;</span><span class="p">]</span>
+        <span class="n">cash_columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;balance&#39;</span><span class="p">,</span> <span class="s1">&#39;amount&#39;</span><span class="p">,</span> <span class="s1">&#39;commission&#39;</span><span class="p">]</span>
+        <span class="n">x_columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;x(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;X(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;commission_x&#39;</span><span class="p">]</span>
+        <span class="n">y_columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;y(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;Y(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;commission_y&#39;</span><span class="p">]</span>
+        <span class="n">all_columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">meta_columns</span> <span class="o">+</span> \
+            <span class="p">[</span><span class="s1">&#39;code_x&#39;</span><span class="p">,</span> <span class="s1">&#39;code_y&#39;</span><span class="p">,</span> <span class="s1">&#39;x(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;y(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;X(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;Y(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;X(t+dt)&#39;</span><span class="p">,</span> <span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">,</span> <span class="s1">&#39;commission_x&#39;</span><span class="p">,</span> <span class="s1">&#39;commission_y&#39;</span><span class="p">]</span>
+        
+        <span class="n">df_meta</span> <span class="o">=</span> <span class="n">df_jpy</span><span class="p">[[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">meta_columns</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">df_meta</span><span class="p">[</span><span class="s1">&#39;trade_date&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_meta</span><span class="p">[</span><span class="s1">&#39;trade_date&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">strptime</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1">T%H:%M:%S.</span><span class="si">%f</span><span class="s1">&#39;</span><span class="p">))</span>
+        
+        <span class="n">df_x</span> <span class="o">=</span> <span class="n">df_jpy</span><span class="p">[[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">cash_columns</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">df_x</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">x_columns</span>
+        
+        <span class="n">df_x</span><span class="p">[</span><span class="n">x_columns</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_x</span><span class="p">[</span><span class="n">x_columns</span><span class="p">]</span><span class="o">.</span><span class="n">applymap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">Fraction</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+        <span class="n">df_x</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="n">df_x</span><span class="p">[</span><span class="s1">&#39;commission_x&#39;</span><span class="p">]</span>
+        <span class="n">df_x</span><span class="p">[</span><span class="s1">&#39;X(t+dt)&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_x</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="mf">0.0</span> <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">x</span><span class="p">)</span>
+        <span class="n">df_x</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_x</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="o">-</span><span class="n">x</span> <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">)</span>
+        <span class="n">df_x</span><span class="p">[</span><span class="s1">&#39;code_x&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_jpy</span><span class="p">[</span><span class="s1">&#39;currency_code&#39;</span><span class="p">]</span>
+        
+        <span class="n">df_y</span> <span class="o">=</span> <span class="n">df_btc</span><span class="p">[[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">cash_columns</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">df_y</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">y_columns</span>
+        <span class="n">df_y</span><span class="p">[</span><span class="n">y_columns</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_y</span><span class="p">[</span><span class="n">y_columns</span><span class="p">]</span><span class="o">.</span><span class="n">applymap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">Fraction</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+        <span class="n">df_y</span><span class="p">[</span><span class="s1">&#39;Y(t)&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="n">df_y</span><span class="p">[</span><span class="s1">&#39;commission_y&#39;</span><span class="p">]</span>
+        <span class="n">df_y</span><span class="p">[</span><span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_y</span><span class="p">[</span><span class="s1">&#39;Y(t)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="mf">0.0</span> <span class="k">if</span> <span class="n">y</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">y</span><span class="p">)</span>
+        <span class="n">df_y</span><span class="p">[</span><span class="s1">&#39;Y(t)&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_y</span><span class="p">[</span><span class="s1">&#39;Y(t)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">y</span><span class="p">:</span> <span class="o">-</span><span class="n">y</span> <span class="k">if</span> <span class="n">y</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">)</span>
+        <span class="n">df_y</span><span class="p">[</span><span class="s1">&#39;code_y&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_btc</span><span class="p">[</span><span class="s1">&#39;currency_code&#39;</span><span class="p">]</span>
+        
+        <span class="n">df_xy</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">df_x</span><span class="p">,</span> <span class="n">df_y</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s1">&#39;outer&#39;</span><span class="p">)</span>
+        <span class="n">df_all</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">df_meta</span><span class="p">,</span> <span class="n">df_xy</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s1">&#39;outer&#39;</span><span class="p">)</span>
+        
+        <span class="n">df_ret</span> <span class="o">=</span> <span class="n">df_all</span><span class="p">[</span><span class="n">all_columns</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">start_date</span><span class="p">,</span> <span class="n">datetime</span><span class="p">):</span>
+            <span class="n">df_ret</span> <span class="o">=</span> <span class="n">df_ret</span><span class="p">[</span><span class="n">df_ret</span><span class="p">[</span><span class="s1">&#39;trade_date&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">start_date</span><span class="p">]</span>
+        
+        <span class="k">return</span> <span class="n">df_ret</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.get_history"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.get_history">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">get_history</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start_date</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cashflow</span><span class="p">(</span><span class="n">start_date</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cashflow_to_history</span><span class="p">(</span><span class="n">df</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.buy"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.buy">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">buy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">order</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">api_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">api_secret</span><span class="p">,</span> <span class="s1">&#39;BUY&#39;</span><span class="p">,</span> <span class="s1">&#39;MARKET&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+            <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="kc">None</span>
+        
+        <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span></div>
+    
+<div class="viewcode-block" id="BitflyerAPI.sell"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.bitflyer.BitflyerAPI.sell">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">sell</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">order</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">api_key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">api_secret</span><span class="p">,</span> <span class="s1">&#39;SELL&#39;</span><span class="p">,</span> <span class="s1">&#39;MARKET&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+            <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="kc">None</span>
+        
+        <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span></div></div>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">クイック検索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="検索" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="総合索引"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.interface.bitflyer</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2022, Josh Nobus.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.1.1.
+    </div>
+  </body>
+</html>

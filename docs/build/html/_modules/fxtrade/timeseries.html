@@ -1,0 +1,330 @@
+
+
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fxtrade.timeseries &#8212; fxtrade 0.0.6 ドキュメント</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bizstyle.css" />
+    
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/translations.js"></script>
+    <script src="../../_static/bizstyle.js"></script>
+    <link rel="index" title="索引" href="../../genindex.html" />
+    <link rel="search" title="検索" href="../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.timeseries</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>fxtrade.timeseries のソースコード</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Utilities to assist in processing time series data.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Iterable</span>
+
+<span class="n">INTERVALS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s1">&#39;1m&#39;</span><span class="p">,</span> <span class="s1">&#39;5m&#39;</span><span class="p">,</span> <span class="s1">&#39;10m&#39;</span><span class="p">,</span> <span class="s1">&#39;15m&#39;</span><span class="p">,</span> <span class="s1">&#39;30m&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;1h&#39;</span><span class="p">,</span> <span class="s1">&#39;3h&#39;</span><span class="p">,</span> <span class="s1">&#39;6h&#39;</span><span class="p">,</span> <span class="s1">&#39;12h&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;1d&#39;</span><span class="p">,</span> <span class="s1">&#39;3d&#39;</span><span class="p">,</span> <span class="s1">&#39;5d&#39;</span><span class="p">,</span> <span class="s1">&#39;7d&#39;</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="n">MINUTES</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;1m&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;5m&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span> <span class="s1">&#39;10m&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span> <span class="s1">&#39;15m&#39;</span><span class="p">:</span> <span class="mi">15</span><span class="p">,</span> <span class="s1">&#39;30m&#39;</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span> <span class="p">}</span>
+<span class="n">HOURS</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;1h&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;3h&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;6h&#39;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span> <span class="s1">&#39;12h&#39;</span><span class="p">:</span> <span class="mi">12</span><span class="p">,</span> <span class="p">}</span>
+<span class="n">DAYS</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;1d&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;3d&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;5d&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span> <span class="s1">&#39;7d&#39;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span> <span class="p">}</span>
+
+<div class="viewcode-block" id="delta"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.delta">[ドキュメント]</a><span class="k">def</span> <span class="nf">delta</span><span class="p">(</span><span class="n">ts</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given an equally spaced time index, return the interval.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">dts</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dts</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;all timedelta must be the same&quot;</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">dts</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="to_timedelta"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.to_timedelta">[ドキュメント]</a><span class="k">def</span> <span class="nf">to_timedelta</span><span class="p">(</span><span class="n">interval</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert a string representing a period of time,</span>
+<span class="sd">    such as &#39;1d&#39; or &#39;1h&#39;, to pandas.Timedelta.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">interval</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">INTERVALS</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;interval must be one of </span><span class="si">{</span><span class="n">INTERVALS</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">interval</span> <span class="ow">in</span> <span class="n">MINUTES</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="n">MINUTES</span><span class="p">[</span><span class="n">interval</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">interval</span> <span class="ow">in</span> <span class="n">HOURS</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="n">HOURS</span><span class="p">[</span><span class="n">interval</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">interval</span> <span class="ow">in</span> <span class="n">DAYS</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">DAYS</span><span class="p">[</span><span class="n">interval</span><span class="p">])</span>
+    
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;unknown error&quot;</span><span class="p">)</span></div>
+    
+<span class="c1"># ダウンサンプリング &amp; 中途半端な時間に取得したデータを削除</span>
+<div class="viewcode-block" id="down_sampling"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.down_sampling">[ドキュメント]</a><span class="k">def</span> <span class="nf">down_sampling</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">interval</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return dataframe which is applied down sampling with specified interval.</span>
+<span class="sd">    Data recorded at the halfway point will be deleted.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">interval</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">INTERVALS</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;interval must be one of </span><span class="si">{</span><span class="n">INTERVALS</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+    <span class="c1"># 残すデータのインデックス</span>
+    <span class="k">if</span> <span class="n">interval</span> <span class="ow">in</span> <span class="n">MINUTES</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">minute</span> <span class="o">%</span> <span class="n">MINUTES</span><span class="p">[</span><span class="n">interval</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">second</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">interval</span> <span class="ow">in</span> <span class="n">HOURS</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">hour</span> <span class="o">%</span> <span class="n">HOURS</span><span class="p">[</span><span class="n">interval</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">minute</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">second</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">interval</span> <span class="ow">in</span> <span class="n">DAYS</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">day</span> <span class="o">%</span> <span class="n">DAYS</span><span class="p">[</span><span class="n">interval</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">hour</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">minute</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">second</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">idx</span><span class="o">.</span><span class="n">values</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span></div>
+    
+<div class="viewcode-block" id="get_first_timestamp"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.get_first_timestamp">[ドキュメント]</a><span class="k">def</span> <span class="nf">get_first_timestamp</span><span class="p">(</span><span class="n">ts</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">,</span> <span class="n">interval</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">interval</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;1d&#39;</span><span class="p">,</span> <span class="s1">&#39;15m&#39;</span><span class="p">,</span> <span class="s1">&#39;1m&#39;</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;interval must be one of [&#39;1d&#39;, &#39;15m&#39;, &#39;1m&#39;]&quot;</span><span class="p">)</span>
+    
+    <span class="n">table</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;1d&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">(</span><span class="n">ts</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">ts</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">ts</span><span class="o">.</span><span class="n">day</span><span class="p">),</span>
+        <span class="s1">&#39;15m&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">(</span><span class="n">ts</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">ts</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">ts</span><span class="o">.</span><span class="n">day</span><span class="p">,</span> <span class="n">ts</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span> <span class="mi">15</span> <span class="o">*</span> <span class="p">(</span><span class="n">ts</span><span class="o">.</span><span class="n">minute</span> <span class="o">//</span> <span class="mi">15</span><span class="p">)),</span>
+        <span class="s1">&#39;1m&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">(</span><span class="n">ts</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">ts</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">ts</span><span class="o">.</span><span class="n">day</span><span class="p">,</span> <span class="n">ts</span><span class="o">.</span><span class="n">hour</span><span class="p">,</span> <span class="n">ts</span><span class="o">.</span><span class="n">minute</span><span class="p">),</span>
+    <span class="p">}</span>
+    
+    <span class="k">return</span> <span class="n">table</span><span class="p">[</span><span class="n">interval</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="normalized_timeindex"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.normalized_timeindex">[ドキュメント]</a><span class="k">def</span> <span class="nf">normalized_timeindex</span><span class="p">(</span><span class="n">start</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">],</span>
+                         <span class="n">end</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">],</span>
+                         <span class="n">delta</span><span class="p">:</span> <span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">start</span> <span class="o">&gt;=</span> <span class="n">end</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;end must be larger than start&quot;</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">delta</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="select"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.select">[ドキュメント]</a><span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+           <span class="n">year</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+           <span class="n">month</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+           <span class="n">day</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+           <span class="n">hour</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+           <span class="n">minute</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+           <span class="n">second</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span>
+          <span class="p">):</span>
+    
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)))</span>
+    
+    <span class="k">if</span> <span class="n">year</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">&amp;=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">year</span> <span class="o">==</span> <span class="n">year</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">month</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">&amp;=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">month</span> <span class="o">==</span> <span class="n">month</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">day</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">&amp;=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">day</span> <span class="o">==</span> <span class="n">day</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">hour</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">&amp;=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">hour</span> <span class="o">==</span> <span class="n">hour</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">minute</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">&amp;=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">minute</span> <span class="o">==</span> <span class="n">minute</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">second</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">&amp;=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">second</span> <span class="o">==</span> <span class="n">second</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">idx</span><span class="o">.</span><span class="n">values</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="merge"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.merge">[ドキュメント]</a><span class="k">def</span> <span class="nf">merge</span><span class="p">(</span><span class="n">df_prev</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">df_prev</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">df</span>
+    
+    <span class="n">idx_prev</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">df_prev</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="n">idx</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    
+    <span class="n">intersec</span> <span class="o">=</span> <span class="n">idx_prev</span> <span class="o">&amp;</span> <span class="n">idx</span>
+    
+    <span class="c1"># 共通部分で NaN を含まない新しい情報</span>
+    <span class="n">idx_new_inter</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">intersec</span><span class="p">))]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    
+    <span class="c1"># 共通部分から idx_new を除いた古い情報</span>
+    <span class="n">idx_old_inter</span> <span class="o">=</span> <span class="n">intersec</span> <span class="o">-</span> <span class="n">idx_new_inter</span>
+    
+    <span class="c1"># 共通部分を取り除いて、共通部分の中から使う情報を付け加えた情報</span>
+    <span class="n">idx_old</span> <span class="o">=</span> <span class="p">(</span><span class="n">idx_prev</span> <span class="o">-</span> <span class="n">intersec</span><span class="p">)</span> <span class="o">|</span> <span class="n">idx_old_inter</span>
+    <span class="n">idx_new</span> <span class="o">=</span> <span class="p">(</span><span class="n">idx</span> <span class="o">-</span> <span class="n">intersec</span><span class="p">)</span> <span class="o">|</span> <span class="n">idx_new_inter</span>
+    
+    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span>
+                <span class="n">df_prev</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">idx_old</span><span class="p">))],</span>
+                <span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">idx_new</span><span class="p">))],</span>
+         <span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">sort_index</span><span class="p">()</span>
+    
+    <span class="k">return</span> <span class="n">df</span></div>
+
+<div class="viewcode-block" id="validate_index"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.validate_index">[ドキュメント]</a><span class="k">def</span> <span class="nf">validate_index</span><span class="p">(</span><span class="n">df</span><span class="p">):</span>
+    <span class="n">idx_diff</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span>
+        
+    <span class="n">p_diff</span> <span class="o">=</span> <span class="n">idx_diff</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">idx_diff</span><span class="o">.</span><span class="n">index</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">(</span><span class="mi">0</span><span class="p">)]</span>
+    <span class="n">m_diff</span> <span class="o">=</span> <span class="n">idx_diff</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">idx_diff</span><span class="o">.</span><span class="n">index</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">(</span><span class="mi">0</span><span class="p">)]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">p_diff</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">m_diff</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;index is not sorted&quot;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">p_diff</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">ascending</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">m_diff</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">ascending</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;could not find which way it is sorted&quot;</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;ascending&#39;</span><span class="p">:</span> <span class="n">ascending</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="this_year_first"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.this_year_first">[ドキュメント]</a><span class="k">def</span> <span class="nf">this_year_first</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="next_year_first"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.next_year_first">[ドキュメント]</a><span class="k">def</span> <span class="nf">next_year_first</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">year</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="count_years"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.count_years">[ドキュメント]</a><span class="k">def</span> <span class="nf">count_years</span><span class="p">(</span><span class="n">begin</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">,</span> <span class="n">end</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">end</span><span class="o">.</span><span class="n">year</span> <span class="o">-</span> <span class="n">begin</span><span class="o">.</span><span class="n">year</span></div>
+
+<div class="viewcode-block" id="add_years"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.add_years">[ドキュメント]</a><span class="k">def</span> <span class="nf">add_years</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">dy</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">year</span><span class="o">+</span><span class="n">dy</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">day</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="year_sections"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.year_sections">[ドキュメント]</a><span class="k">def</span> <span class="nf">year_sections</span><span class="p">(</span><span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">begin</span> <span class="o">&gt;=</span> <span class="n">end</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;begin must be before than end&quot;</span><span class="p">)</span>
+    
+    <span class="n">b</span> <span class="o">=</span> <span class="n">this_year_first</span><span class="p">(</span><span class="n">begin</span><span class="p">)</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">next_year_first</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
+    
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count_years</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">e</span><span class="p">)):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">add_years</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">add_years</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">yield</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="this_month_first"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.this_month_first">[ドキュメント]</a><span class="k">def</span> <span class="nf">this_month_first</span><span class="p">(</span><span class="n">t</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="next_month_first"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.next_month_first">[ドキュメント]</a><span class="k">def</span> <span class="nf">next_month_first</span><span class="p">(</span><span class="n">t</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">month</span> <span class="o">==</span> <span class="mi">12</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">year</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">month</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="count_months"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.count_months">[ドキュメント]</a><span class="k">def</span> <span class="nf">count_months</span><span class="p">(</span><span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+    <span class="n">years</span> <span class="o">=</span> <span class="n">end</span><span class="o">.</span><span class="n">year</span> <span class="o">-</span> <span class="n">begin</span><span class="o">.</span><span class="n">year</span>
+    <span class="n">months</span> <span class="o">=</span> <span class="n">end</span><span class="o">.</span><span class="n">month</span> <span class="o">-</span> <span class="n">begin</span><span class="o">.</span><span class="n">month</span>
+    
+    <span class="k">return</span> <span class="n">years</span> <span class="o">*</span> <span class="mi">12</span> <span class="o">+</span> <span class="n">months</span></div>
+
+<div class="viewcode-block" id="add_months"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.add_months">[ドキュメント]</a><span class="k">def</span> <span class="nf">add_months</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">dm</span><span class="p">):</span>
+    <span class="n">year</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">year</span> <span class="o">+</span> <span class="p">(</span><span class="n">dm</span> <span class="o">//</span> <span class="mi">12</span><span class="p">)</span>
+    <span class="n">month</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">month</span> <span class="o">+</span> <span class="p">(</span><span class="n">dm</span> <span class="o">%</span> <span class="mi">12</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">month</span> <span class="o">&gt;</span> <span class="mi">12</span><span class="p">:</span>
+        <span class="n">year</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">month</span> <span class="o">-=</span> <span class="mi">12</span>
+    
+    <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">day</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="month_sections"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.month_sections">[ドキュメント]</a><span class="k">def</span> <span class="nf">month_sections</span><span class="p">(</span><span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">begin</span> <span class="o">&gt;=</span> <span class="n">end</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;begin must be before than end&quot;</span><span class="p">)</span>
+    
+    <span class="n">b</span> <span class="o">=</span> <span class="n">this_month_first</span><span class="p">(</span><span class="n">begin</span><span class="p">)</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">next_month_first</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
+    
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count_months</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">e</span><span class="p">)):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">add_months</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">add_months</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">yield</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span></div>
+        
+<div class="viewcode-block" id="this_day_first"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.this_day_first">[ドキュメント]</a><span class="k">def</span> <span class="nf">this_day_first</span><span class="p">(</span><span class="n">t</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">day</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="next_day_first"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.next_day_first">[ドキュメント]</a><span class="k">def</span> <span class="nf">next_day_first</span><span class="p">(</span><span class="n">t</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">month</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">day</span><span class="p">)</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="count_days"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.count_days">[ドキュメント]</a><span class="k">def</span> <span class="nf">count_days</span><span class="p">(</span><span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">end</span> <span class="o">-</span> <span class="n">begin</span><span class="p">)</span><span class="o">.</span><span class="n">days</span></div>
+
+<div class="viewcode-block" id="add_days"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.add_days">[ドキュメント]</a><span class="k">def</span> <span class="nf">add_days</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">dd</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">t</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">dd</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="day_sections"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.timeseries.day_sections">[ドキュメント]</a><span class="k">def</span> <span class="nf">day_sections</span><span class="p">(</span><span class="n">begin</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">begin</span> <span class="o">&gt;=</span> <span class="n">end</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;begin must be before than end&quot;</span><span class="p">)</span>
+    
+    <span class="n">b</span> <span class="o">=</span> <span class="n">this_day_first</span><span class="p">(</span><span class="n">begin</span><span class="p">)</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">next_day_first</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
+    
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count_days</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">e</span><span class="p">)):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">add_days</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">add_days</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">yield</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span></div>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">クイック検索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="検索" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.timeseries</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2022, Josh Nobus.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.1.1.
+    </div>
+  </body>
+</html>
