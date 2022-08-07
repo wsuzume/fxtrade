@@ -1,13 +1,40 @@
 from .stock import Stock
 
 class USD(Stock):
-    def __init__(self, quantity):
-        super().__init__('USD', quantity)
+    """
+    Child class of Stock, which code is bound to "USD".
+    """
+    def __init__(self, q):
+        """
+        Parameters
+        ----------
+        q : Numeric
+            Quantity of the stock.
+        """
+        super().__init__('USD', q)
     
 class JPY(Stock):
-    def __init__(self, quantity):
-        super().__init__('JPY', quantity)
+    """
+    Child class of Stock, which code is bound to "JPY".
+    """
+    def __init__(self, q):
+        """
+        Parameters
+        ----------
+        q : Numeric
+            Quantity of the stock.
+        """
+        super().__init__('JPY', q)
 
 class BTC(Stock):
-    def __init__(self, quantity):
-        super().__init__('BTC', quantity)
+    """
+    Child class of Stock, which code is bound to "BTC".
+    """
+    def __init__(self, q):
+        """
+        Parameters
+        ----------
+        q : Numeric
+            Quantity of the stock.
+        """
+        super().__init__('BTC', q)
