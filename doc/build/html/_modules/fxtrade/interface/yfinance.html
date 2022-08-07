@@ -1,0 +1,231 @@
+
+
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fxtrade.interface.yfinance &#8212; fxtrade 0.0.6 ドキュメント</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/bizstyle.css" />
+    
+    <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/translations.js"></script>
+    <script src="../../../_static/bizstyle.js"></script>
+    <link rel="index" title="索引" href="../../../genindex.html" />
+    <link rel="search" title="検索" href="../../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="総合索引"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.interface.yfinance</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>fxtrade.interface.yfinance のソースコード</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+
+<span class="kn">from</span> <span class="nn">..api</span> <span class="kn">import</span> <span class="n">ChartAPI</span>
+<span class="kn">from</span> <span class="nn">..timeseries</span> <span class="kn">import</span> <span class="n">year_sections</span><span class="p">,</span> <span class="n">month_sections</span><span class="p">,</span> <span class="n">day_sections</span>
+
+<span class="c1"># chart_range ... 1d, 5d, 1mo, 3mo, 6mo, 1y, 5y, 10y, ytd, max</span>
+<span class="c1"># interval ... 1m, 5m, 15m, 1d, 1wk, 1mo</span>
+<span class="c1"># 可能な最大の組み合わせ</span>
+<span class="c1"># &#39;5d&#39;, &#39;1m&#39;</span>
+<span class="c1"># &#39;1mo&#39;, &#39;15m&#39;</span>
+<span class="c1"># &#39;10y&#39;, &#39;1d&#39;</span>
+<div class="viewcode-block" id="get_ticker"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.yfinance.get_ticker">[ドキュメント]</a><span class="k">def</span> <span class="nf">get_ticker</span><span class="p">(</span><span class="n">x_api_key</span><span class="p">,</span> <span class="n">ticker</span><span class="o">=</span><span class="s1">&#39;BTC-JPY&#39;</span><span class="p">,</span> <span class="n">chart_range</span><span class="o">=</span><span class="s1">&#39;10y&#39;</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="s1">&#39;1d&#39;</span><span class="p">):</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;https://yfapi.net/v8/finance/chart/</span><span class="si">{</span><span class="n">ticker</span><span class="si">}</span><span class="s1">&#39;</span>
+
+    <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;x-api-key&#39;</span><span class="p">:</span> <span class="n">x_api_key</span>
+    <span class="p">}</span>
+    
+    <span class="n">querystring</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;range&#39;</span><span class="p">:</span> <span class="n">chart_range</span><span class="p">,</span>
+        <span class="s1">&#39;region&#39;</span><span class="p">:</span> <span class="s1">&#39;JP&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;interval&#39;</span><span class="p">:</span> <span class="n">interval</span><span class="p">,</span>
+        <span class="s1">&#39;lang&#39;</span><span class="p">:</span> <span class="s1">&#39;en&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;events&#39;</span><span class="p">:</span> <span class="s1">&#39;div%2Csplit&#39;</span><span class="p">,</span>
+    <span class="p">}</span>
+    
+    <span class="k">return</span> <span class="n">requests</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">querystring</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="response_to_dataframe"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.yfinance.response_to_dataframe">[ドキュメント]</a><span class="k">def</span> <span class="nf">response_to_dataframe</span><span class="p">(</span><span class="n">response</span><span class="p">):</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+    
+    <span class="n">data</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">res</span><span class="p">[</span><span class="s1">&#39;chart&#39;</span><span class="p">][</span><span class="s1">&#39;result&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;timestamp&#39;</span><span class="p">],</span>
+               <span class="n">res</span><span class="p">[</span><span class="s1">&#39;chart&#39;</span><span class="p">][</span><span class="s1">&#39;result&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;indicators&#39;</span><span class="p">][</span><span class="s1">&#39;quote&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;open&#39;</span><span class="p">],</span>
+               <span class="n">res</span><span class="p">[</span><span class="s1">&#39;chart&#39;</span><span class="p">][</span><span class="s1">&#39;result&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;indicators&#39;</span><span class="p">][</span><span class="s1">&#39;quote&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;close&#39;</span><span class="p">],</span>
+               <span class="n">res</span><span class="p">[</span><span class="s1">&#39;chart&#39;</span><span class="p">][</span><span class="s1">&#39;result&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;indicators&#39;</span><span class="p">][</span><span class="s1">&#39;quote&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;high&#39;</span><span class="p">],</span>
+               <span class="n">res</span><span class="p">[</span><span class="s1">&#39;chart&#39;</span><span class="p">][</span><span class="s1">&#39;result&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;indicators&#39;</span><span class="p">][</span><span class="s1">&#39;quote&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;low&#39;</span><span class="p">],</span>
+               <span class="n">res</span><span class="p">[</span><span class="s1">&#39;chart&#39;</span><span class="p">][</span><span class="s1">&#39;result&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;indicators&#39;</span><span class="p">][</span><span class="s1">&#39;quote&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;volume&#39;</span><span class="p">],</span>
+              <span class="p">)</span>
+
+    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;timestamp&#39;</span><span class="p">,</span> <span class="s1">&#39;open&#39;</span><span class="p">,</span> <span class="s1">&#39;close&#39;</span><span class="p">,</span> <span class="s1">&#39;high&#39;</span><span class="p">,</span> <span class="s1">&#39;low&#39;</span><span class="p">,</span> <span class="s1">&#39;volume&#39;</span><span class="p">])</span>
+    
+    <span class="n">df</span><span class="p">[</span><span class="s1">&#39;Date&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;timestamp&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">)</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="s1">&#39;Date&#39;</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">df</span></div>
+
+<div class="viewcode-block" id="YahooFinanceAPI"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.yfinance.YahooFinanceAPI">[ドキュメント]</a><span class="k">class</span> <span class="nc">YahooFinanceAPI</span><span class="p">(</span><span class="n">ChartAPI</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">api_key</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">api_key</span> <span class="o">=</span> <span class="n">api_key</span>
+        
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">tickers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="s1">&#39;USD-JPY&#39;</span><span class="p">,</span> <span class="s1">&#39;BTC-JPY&#39;</span><span class="p">]</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">cranges</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="s1">&#39;1d&#39;</span><span class="p">,</span> <span class="s1">&#39;5d&#39;</span><span class="p">,</span> <span class="s1">&#39;1mo&#39;</span><span class="p">,</span> <span class="s1">&#39;3mo&#39;</span><span class="p">,</span> <span class="s1">&#39;6mo&#39;</span><span class="p">,</span> <span class="s1">&#39;1y&#39;</span><span class="p">,</span> <span class="s1">&#39;5y&#39;</span><span class="p">,</span> <span class="s1">&#39;10y&#39;</span><span class="p">,</span> <span class="s1">&#39;ytd&#39;</span><span class="p">,</span> <span class="s1">&#39;max&#39;</span><span class="p">]</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">intervals</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="s1">&#39;1m&#39;</span><span class="p">,</span> <span class="s1">&#39;5m&#39;</span><span class="p">,</span> <span class="s1">&#39;15m&#39;</span><span class="p">,</span> <span class="s1">&#39;1d&#39;</span><span class="p">,</span> <span class="s1">&#39;1wk&#39;</span><span class="p">,</span> <span class="s1">&#39;1mo&#39;</span><span class="p">]</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">max_crange</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">interval</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;1d&#39;</span><span class="p">:</span> <span class="s1">&#39;10y&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;15m&#39;</span><span class="p">:</span> <span class="s1">&#39;1mo&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;1m&#39;</span><span class="p">:</span> <span class="s1">&#39;5d&#39;</span><span class="p">,</span>
+        <span class="p">}</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">default_crange_intervals</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;10y-1d&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;10y&#39;</span><span class="p">,</span> <span class="s1">&#39;1d&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;1mo-15m&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;1mo&#39;</span><span class="p">,</span> <span class="s1">&#39;15m&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;5d-1m&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;5d&#39;</span><span class="p">,</span> <span class="s1">&#39;1m&#39;</span><span class="p">),</span>
+        <span class="p">}</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">default_timestamp_filter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;10y-1d&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">hour</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">minute</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> \
+                                <span class="ow">and</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">second</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">nanosecond</span> <span class="o">==</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="s1">&#39;1mo-15m&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">minute</span> <span class="o">%</span> <span class="mi">15</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> \
+                                <span class="ow">and</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">second</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">nanosecond</span> <span class="o">==</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="s1">&#39;5d-1m&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">second</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">nanosecond</span> <span class="o">==</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="p">}</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">default_save_fstring</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;10y-1d&#39;</span><span class="p">:</span> <span class="s1">&#39;%Y.csv&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;1mo-15m&#39;</span><span class="p">:</span> <span class="s1">&#39;%Y-%m.csv&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;5d-1m&#39;</span><span class="p">:</span> <span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1">.csv&#39;</span><span class="p">,</span>
+        <span class="p">}</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">default_save_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;10y-1d&#39;</span><span class="p">:</span> <span class="n">year_sections</span><span class="p">,</span>
+            <span class="s1">&#39;1mo-15m&#39;</span><span class="p">:</span> <span class="n">month_sections</span><span class="p">,</span>
+            <span class="s1">&#39;5d-1m&#39;</span><span class="p">:</span> <span class="n">day_sections</span><span class="p">,</span>
+        <span class="p">}</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">empty</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([],</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;timestamp&#39;</span><span class="p">,</span> <span class="s1">&#39;open&#39;</span><span class="p">,</span> <span class="s1">&#39;close&#39;</span><span class="p">,</span> <span class="s1">&#39;high&#39;</span><span class="p">,</span> <span class="s1">&#39;low&#39;</span><span class="p">,</span> <span class="s1">&#39;volume&#39;</span><span class="p">])</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">now</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="s1">&#39;5d&#39;</span><span class="p">,</span> <span class="s1">&#39;1m&#39;</span><span class="p">)</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">maxlong</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="s1">&#39;10y&#39;</span><span class="p">,</span> <span class="s1">&#39;1d&#39;</span><span class="p">)</span>
+    
+<div class="viewcode-block" id="YahooFinanceAPI.download"><a class="viewcode-back" href="../../../modules/fxtrade.interface.html#fxtrade.interface.yfinance.YahooFinanceAPI.download">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">download</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">,</span> <span class="n">crange</span><span class="p">,</span> <span class="n">interval</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">as_dataframe</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">t</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="ne">UserWarning</span><span class="p">(</span><span class="s2">&quot;specifying the time is not supported. t must be None.&quot;</span><span class="p">))</span>
+        
+        <span class="k">if</span> <span class="n">ticker</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tickers</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ticker &#39;</span><span class="si">{</span><span class="n">ticker</span><span class="si">}</span><span class="s2">&#39; not in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">tickers</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">crange</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cranges</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;crange &#39;</span><span class="si">{</span><span class="n">crange</span><span class="si">}</span><span class="s2">&#39; not in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">cranges</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">interval</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;interval &#39;</span><span class="si">{</span><span class="n">interval</span><span class="si">}</span><span class="s2">&#39; not in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">intervals</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">response</span> <span class="o">=</span> <span class="n">get_ticker</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">api_key</span><span class="p">,</span>
+                              <span class="n">ticker</span><span class="o">=</span><span class="n">ticker</span><span class="p">,</span>
+                              <span class="n">chart_range</span><span class="o">=</span><span class="n">crange</span><span class="p">,</span>
+                              <span class="n">interval</span><span class="o">=</span><span class="n">interval</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">as_dataframe</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">response</span>
+            
+        <span class="k">return</span> <span class="n">response_to_dataframe</span><span class="p">(</span><span class="n">response</span><span class="p">)</span></div></div>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">クイック検索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="検索" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="総合索引"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.interface.yfinance</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2022, Josh Nobus.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.1.1.
+    </div>
+  </body>
+</html>

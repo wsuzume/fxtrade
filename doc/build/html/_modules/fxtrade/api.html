@@ -1,0 +1,209 @@
+
+
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fxtrade.api &#8212; fxtrade 0.0.6 ドキュメント</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bizstyle.css" />
+    
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/translations.js"></script>
+    <script src="../../_static/bizstyle.js"></script>
+    <link rel="index" title="索引" href="../../genindex.html" />
+    <link rel="search" title="検索" href="../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.api</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>fxtrade.api のソースコード</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">abc</span> <span class="kn">import</span> <span class="n">ABC</span><span class="p">,</span> <span class="n">abstractmethod</span>
+
+<div class="viewcode-block" id="ChartAPI"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.ChartAPI">[ドキュメント]</a><span class="k">class</span> <span class="nc">ChartAPI</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">api_key</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">tickers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">cranges</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">intervals</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">max_crange</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">default_crange_intervals</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">default_timestamp_filter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">default_save_fstring</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">default_save_iterator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">empty</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">now</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+    <span class="nd">@property</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">maxlong</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+<div class="viewcode-block" id="ChartAPI.download"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.ChartAPI.download">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">download</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">,</span> <span class="n">crange</span><span class="p">,</span> <span class="n">interval</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">as_dataframe</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="ChartAPI.download_now"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.ChartAPI.download_now">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">download_now</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">,</span> <span class="n">as_dataframe</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">crange</span><span class="p">,</span> <span class="n">interval</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">now</span>
+        
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="n">ticker</span><span class="p">,</span> <span class="n">crange</span><span class="p">,</span> <span class="n">interval</span><span class="p">,</span> <span class="n">as_dataframe</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="ChartAPI.download_maxlong"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.ChartAPI.download_maxlong">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">download_maxlong</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ticker</span><span class="p">,</span> <span class="n">as_dataframe</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">crange</span><span class="p">,</span> <span class="n">interval</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">maxlong</span>
+        
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="n">ticker</span><span class="p">,</span> <span class="n">crange</span><span class="p">,</span> <span class="n">interval</span><span class="p">,</span> <span class="n">as_dataframe</span><span class="p">)</span></div></div>
+
+<div class="viewcode-block" id="TradeAPI"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI">[ドキュメント]</a><span class="k">class</span> <span class="nc">TradeAPI</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">api_key</span><span class="p">,</span> <span class="n">api_secret</span><span class="p">):</span>
+        <span class="k">pass</span>
+    
+<div class="viewcode-block" id="TradeAPI.minimum_order_quantity"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.minimum_order_quantity">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">minimum_order_quantity</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="TradeAPI.maximum_order_quantity"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.maximum_order_quantity">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">maximum_order_quantity</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="TradeAPI.get_balance"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.get_balance">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">get_balance</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="TradeAPI.get_commission"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.get_commission">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">get_commission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">product_code</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="TradeAPI.get_ticker"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.get_ticker">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">get_ticker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="TradeAPI.get_best_bid"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.get_best_bid">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">get_best_bid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="TradeAPI.get_best_ask"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.get_best_ask">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">get_best_ask</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="TradeAPI.get_history"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.get_history">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">get_history</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start_date</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="TradeAPI.buy"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.buy">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">buy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="TradeAPI.sell"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.api.TradeAPI.sell">[ドキュメント]</a>    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">sell</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+        <span class="k">pass</span></div></div>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">クイック検索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="検索" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.api</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2022, Josh Nobus.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.1.1.
+    </div>
+  </body>
+</html>

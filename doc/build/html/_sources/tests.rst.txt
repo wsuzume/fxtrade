@@ -1,0 +1,29 @@
+tests package
+=============
+
+Submodules
+----------
+
+tests.test\_stock module
+------------------------
+
+.. automodule:: tests.test_stock
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+tests.test\_trade module
+------------------------
+
+.. automodule:: tests.test_trade
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: tests
+   :members:
+   :undoc-members:
+   :show-inheritance:

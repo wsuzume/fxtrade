@@ -1,0 +1,699 @@
+
+
+<!doctype html>
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fxtrade.trade &#8212; fxtrade 0.0.6 ドキュメント</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bizstyle.css" />
+    
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/translations.js"></script>
+    <script src="../../_static/bizstyle.js"></script>
+    <link rel="index" title="索引" href="../../genindex.html" />
+    <link rel="search" title="検索" href="../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.trade</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>fxtrade.trade のソースコード</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+
+<span class="kn">from</span> <span class="nn">fractions</span> <span class="kn">import</span> <span class="n">Fraction</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">from</span> <span class="nn">.const</span> <span class="kn">import</span> <span class="n">Const</span>
+<span class="kn">from</span> <span class="nn">.stock</span> <span class="kn">import</span> <span class="n">as_numeric</span><span class="p">,</span> <span class="n">Numeric</span><span class="p">,</span> <span class="n">Stock</span><span class="p">,</span> <span class="n">Rate</span>
+
+<span class="n">TRADE</span> <span class="o">=</span> <span class="n">Const</span><span class="p">({</span><span class="s1">&#39;BUY&#39;</span><span class="p">,</span> <span class="s1">&#39;SELL&#39;</span><span class="p">,</span> <span class="s1">&#39;DEPOSIT&#39;</span><span class="p">,</span> <span class="s1">&#39;WITHDRAW&#39;</span><span class="p">})</span>
+<span class="n">TRADE</span><span class="o">.</span><span class="n">TRADE_COLUMNS</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Index</span><span class="p">([</span>
+    <span class="s1">&#39;t&#39;</span><span class="p">,</span> <span class="s1">&#39;order_id&#39;</span><span class="p">,</span> <span class="s1">&#39;from&#39;</span><span class="p">,</span> <span class="s1">&#39;X(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;to&#39;</span><span class="p">,</span> <span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">,</span> <span class="s1">&#39;R(yt/xt)&#39;</span>
+<span class="p">])</span>
+<span class="n">TRADE</span><span class="o">.</span><span class="n">TRADE_PAIR_COLUMNS</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Index</span><span class="p">([</span>
+    <span class="s1">&#39;before_id&#39;</span><span class="p">,</span> <span class="s1">&#39;after_id&#39;</span><span class="p">,</span> <span class="s1">&#39;s&#39;</span><span class="p">,</span> <span class="s1">&#39;t&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;X(s)&#39;</span><span class="p">,</span> <span class="s1">&#39;Y(s+ds)=Y(t)&#39;</span><span class="p">,</span> <span class="s1">&#39;Z(t+dt)&#39;</span><span class="p">,</span> <span class="s1">&#39;code_X&#39;</span><span class="p">,</span> <span class="s1">&#39;code_Y&#39;</span><span class="p">,</span> <span class="s1">&#39;code_Z&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;R(ys/xs)&#39;</span><span class="p">,</span> <span class="s1">&#39;R(zt/yt)&#39;</span><span class="p">,</span> <span class="s1">&#39;R(zt/xs)&#39;</span><span class="p">,</span>
+<span class="p">])</span>
+<span class="n">TRADE</span><span class="o">.</span><span class="n">TRADE_SUMMARY_COLUMNS</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Index</span><span class="p">([</span>
+    <span class="s1">&#39;capital&#39;</span><span class="p">,</span> <span class="s1">&#39;via&#39;</span><span class="p">,</span> <span class="s1">&#39;used&#39;</span><span class="p">,</span> <span class="s1">&#39;earned&#39;</span><span class="p">,</span> <span class="s1">&#39;position&#39;</span><span class="p">,</span> <span class="s1">&#39;hold&#39;</span><span class="p">,</span> <span class="s1">&#39;rate_mean&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;position_min&#39;</span><span class="p">,</span> <span class="s1">&#39;hold_min&#39;</span><span class="p">,</span> <span class="s1">&#39;rate_min&#39;</span><span class="p">,</span> <span class="s1">&#39;position_max&#39;</span><span class="p">,</span> <span class="s1">&#39;hold_max&#39;</span><span class="p">,</span> <span class="s1">&#39;rate_max&#39;</span><span class="p">,</span>
+<span class="p">])</span>
+
+
+<div class="viewcode-block" id="Transfer"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Transfer">[ドキュメント]</a><span class="k">class</span> <span class="nc">Transfer</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Transfer of funds outside of transactions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="Transfer.deposit"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Transfer.deposit">[ドキュメント]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">deposit</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+    
+<div class="viewcode-block" id="Transfer.withdraw"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Transfer.withdraw">[ドキュメント]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">withdraw</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="Transfer.__init__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Transfer.__init__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">Stock</span><span class="p">,</span> <span class="n">t</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">]):</span>
+        <span class="k">if</span> <span class="n">t</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">x</span></div></div>
+    
+<div class="viewcode-block" id="Trade"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade">[ドキュメント]</a><span class="k">class</span> <span class="nc">Trade</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Represent a single transaction.</span>
+<span class="sd">    Consists from the stock before transaction and the stock after transaction.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="Trade.from_series"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.from_series">[ドキュメント]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">from_series</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create Trade from pandas.Series. Columns must be</span>
+<span class="sd">        pd.Index([&#39;t&#39;, &#39;order_id&#39;, &#39;from&#39;, &#39;X(t)&#39;, &#39;to&#39;, &#39;Y(t+dt)&#39;, &#39;R(yt/xt)&#39;])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">Stock</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;from&#39;</span><span class="p">],</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">])</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">Stock</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;to&#39;</span><span class="p">],</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">])</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;t&#39;</span><span class="p">]</span>
+        <span class="n">order_id</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;order_id&#39;</span><span class="p">]</span>
+
+        <span class="n">r</span> <span class="o">=</span> <span class="n">Rate</span><span class="o">.</span><span class="n">from_stocks</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">r</span> <span class="o">!=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;invalid rate on R(yt/xt).&quot;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">t</span><span class="p">,</span> <span class="n">order_id</span><span class="o">=</span><span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.from_stock_and_rate"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.from_stock_and_rate">[ドキュメント]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">from_stock_and_rate</span><span class="p">(</span><span class="n">stock</span><span class="p">:</span> <span class="n">Stock</span><span class="p">,</span> <span class="n">rate</span><span class="p">:</span> <span class="n">Rate</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">order_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create Trade from Stock and Rate.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">stock</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">stock</span> <span class="o">*</span> <span class="n">rate</span>
+        
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.__init__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.__init__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="n">x</span><span class="p">:</span> <span class="n">Stock</span><span class="p">,</span>
+                 <span class="n">y</span><span class="p">:</span> <span class="n">Stock</span><span class="p">,</span>
+                 <span class="n">t</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">order_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        x : Stock</span>
+<span class="sd">            The stock before the transaction.</span>
+<span class="sd">        y : Stock</span>
+<span class="sd">            The stock after the transaction.</span>
+<span class="sd">        t : pandas.Timestamp, optional</span>
+<span class="sd">            The time at which the transaction took place. If not specified, the current time will be set.</span>
+<span class="sd">        order_id : str, optional</span>
+<span class="sd">            Order ID.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">t</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">t</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_x</span> <span class="o">=</span> <span class="n">x</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_y</span> <span class="o">=</span> <span class="n">y</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span> <span class="o">=</span> <span class="n">order_id</span></div>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">x</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Stock</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;The stock before the transaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_x</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">y</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Stock</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;The stock after the transaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_y</span>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">rate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Rate</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;The rate at the transaction.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="k">return</span> <span class="n">Rate</span><span class="o">.</span><span class="n">from_stocks</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+    
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span><span class="o">.</span><span class="n">r</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rate</span><span class="p">,</span> <span class="n">Rate</span><span class="p">)</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Trade(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="si">}</span><span class="s2"> | R(yt/xt): </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="p">)</span><span class="si">}</span><span class="s2"> | &quot;</span>\
+                   <span class="sa">f</span><span class="s2">&quot;X(t): </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">q</span><span class="p">)</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2"> -&gt; Y(t+dt): </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">q</span><span class="p">)</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Trade(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="si">}</span><span class="s2"> | R(yt/xt): </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="p">)</span><span class="si">}</span><span class="s2"> | &quot;</span>\
+               <span class="sa">f</span><span class="s2">&quot;X(t): </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">q</span><span class="p">)</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2"> -&gt; Y(t+dt): </span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">q</span><span class="p">)</span><span class="si">}{</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">)&quot;</span>
+    
+<div class="viewcode-block" id="Trade.as_series"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.as_series">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">as_series</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Convert to pandas.Series.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">,</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">q</span><span class="p">,</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">q</span><span class="p">,</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">rate</span><span class="o">.</span><span class="n">r</span><span class="p">],</span> <span class="n">index</span><span class="o">=</span><span class="n">TRADE</span><span class="o">.</span><span class="n">TRADE_COLUMNS</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.split_x"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.split_x">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">split_x</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">Stock</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Split a trade by x into two trades.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">code</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">code</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;stock code must be </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">x</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;quantity of splitter must be smaller than </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">x</span>
+        <span class="n">x2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">-</span> <span class="n">x</span>
+        
+        <span class="n">y1</span> <span class="o">=</span> <span class="n">x1</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span>
+        <span class="n">y2</span> <span class="o">=</span> <span class="n">x2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span>
+        
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">),</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span> <span class="n">y2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.split_y"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.split_y">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">split_y</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">Stock</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Split a trade by y into two trades.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">y</span><span class="o">.</span><span class="n">code</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;stock code must be </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">y</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;quantity of splitter must be smaller than </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="n">y1</span> <span class="o">=</span> <span class="n">y</span>
+        <span class="n">y2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">-</span> <span class="n">y</span>
+        
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">y1</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span>
+        <span class="n">x2</span> <span class="o">=</span> <span class="n">y2</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span>
+        
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">),</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span> <span class="n">y2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.split"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.split">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">split</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">z</span><span class="p">:</span> <span class="n">Stock</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Split a trade into two trades. Whether it is divided by</span>
+<span class="sd">        x or y is automatically determined by the code.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">z</span><span class="o">.</span><span class="n">code</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">code</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">split_x</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">z</span><span class="o">.</span><span class="n">code</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">split_y</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;stock code must be </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2"> or </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.settle"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.settle">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">settle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trade</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculate the confirmed profit and remaining unrealized profit from the two trades.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">&gt;</span> <span class="n">trade</span><span class="o">.</span><span class="n">t</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;trade.t must be greater than or equal to self.t&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">==</span> <span class="n">trade</span><span class="o">.</span><span class="n">x</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">TradePair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trade</span><span class="p">),</span> <span class="kc">None</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">&lt;</span> <span class="n">trade</span><span class="o">.</span><span class="n">x</span><span class="p">:</span>
+            <span class="n">settled</span><span class="p">,</span> <span class="n">unsettled</span> <span class="o">=</span> <span class="n">trade</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">TradePair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">settled</span><span class="p">),</span> <span class="n">unsettled</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">settled</span><span class="p">,</span> <span class="n">unsettled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">trade</span><span class="o">.</span><span class="n">x</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">TradePair</span><span class="p">(</span><span class="n">settled</span><span class="p">,</span> <span class="n">trade</span><span class="p">),</span> <span class="n">unsettled</span></div>
+    
+<div class="viewcode-block" id="Trade.xfloor"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.xfloor">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">xfloor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Truncate the pre-trade stock on the specified digit.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span>
+        
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.yfloor"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.yfloor">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">yfloor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">6</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Truncate the post-trade stock on the specified digit.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">y</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span>
+        
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.floor"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.floor">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">floor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">6</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Truncate the post-trade stock on the specified digit.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">yfloor</span><span class="p">(</span><span class="n">n</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.xceil"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.xceil">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">xceil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Round up the pre-trade stock on the specified digit.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span>
+        
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.yceil"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.yceil">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">yceil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">6</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Round up the post-trade stock on the specified digit.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">y</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">rate</span>
+        
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.ceil"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.ceil">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">ceil</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">6</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Round up the post-trade stock on the specified digit.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">yceil</span><span class="p">(</span><span class="n">n</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.__mul__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.__mul__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to multiply the other to both x and y.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">*</span> <span class="n">other</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">*</span> <span class="n">other</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.__truediv__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.__truediv__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__truediv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to devide by the other to both x and y.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">/</span> <span class="n">other</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">/</span> <span class="n">other</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Trade.__floordiv__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.__floordiv__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__floordiv__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to devide by the other to both x and y and calculate floor().</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">/</span> <span class="n">other</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">/</span> <span class="n">other</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span><span class="o">.</span><span class="n">floor</span><span class="p">()</span></div>
+    
+<div class="viewcode-block" id="Trade.__mod__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Trade.__mod__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__mod__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Try to devide by the other to both x and y and calculate ceil().</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Trade</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">/</span> <span class="n">other</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">/</span> <span class="n">other</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order_id</span><span class="p">)</span><span class="o">.</span><span class="n">ceil</span><span class="p">()</span></div></div>
+
+<div class="viewcode-block" id="TradePair"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.TradePair">[ドキュメント]</a><span class="k">class</span> <span class="nc">TradePair</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Pair of transactions with confirmed profit or loss.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="TradePair.from_series"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.TradePair.from_series">[ドキュメント]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">from_series</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create TradePair from pandas.Series. Columns must be</span>
+<span class="sd">        pd.Index([&#39;before_id&#39;, &#39;after_id&#39;, &#39;s&#39;, &#39;t&#39;,</span>
+<span class="sd">        &#39;X(s)&#39;, &#39;Y(s+ds)=Y(t)&#39;, &#39;Z(t+dt)&#39;, &#39;code_X&#39;, &#39;code_Y&#39;, &#39;code_Z&#39;,</span>
+<span class="sd">        &#39;R(ys/xs)&#39;, &#39;R(zt/yt)&#39;, &#39;R(zt/xs)&#39;]).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">before</span> <span class="o">=</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">Stock</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;code_X&#39;</span><span class="p">],</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;X(s)&#39;</span><span class="p">]),</span>
+                       <span class="n">y</span><span class="o">=</span><span class="n">Stock</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;code_Y&#39;</span><span class="p">],</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Y(s+ds)=Y(t)&#39;</span><span class="p">]),</span>
+                       <span class="n">order_id</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;before_id&#39;</span><span class="p">],</span> <span class="n">t</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">])</span>
+        
+        <span class="n">after</span> <span class="o">=</span> <span class="n">Trade</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">Stock</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;code_Y&#39;</span><span class="p">],</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Y(s+ds)=Y(t)&#39;</span><span class="p">]),</span>
+                      <span class="n">y</span><span class="o">=</span><span class="n">Stock</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;code_Z&#39;</span><span class="p">],</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Z(t+dt)&#39;</span><span class="p">]),</span>
+                      <span class="n">order_id</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;after_id&#39;</span><span class="p">],</span> <span class="n">t</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;t&#39;</span><span class="p">])</span>
+        
+        <span class="k">if</span> <span class="n">before</span><span class="o">.</span><span class="n">rate</span><span class="o">.</span><span class="n">r</span> <span class="o">!=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;R(ys/xs)&#39;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;invalid rate on R(ys/xs)&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">after</span><span class="o">.</span><span class="n">rate</span><span class="o">.</span><span class="n">r</span> <span class="o">!=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;R(zt/yt)&#39;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;invalid rate on R(zt/yt)&#39;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">TradePair</span><span class="p">(</span><span class="n">before</span><span class="p">,</span> <span class="n">after</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="TradePair.__init__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.TradePair.__init__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">before</span><span class="p">:</span> <span class="n">Trade</span><span class="p">,</span> <span class="n">after</span><span class="p">:</span> <span class="n">Trade</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        before : Trade</span>
+<span class="sd">            A trade you made.</span>
+<span class="sd">        after : Trade</span>
+<span class="sd">            A trade in which profit or loss are determined.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">before</span><span class="o">.</span><span class="n">t</span> <span class="o">&gt;</span> <span class="n">after</span><span class="o">.</span><span class="n">t</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;before.t must be smaller than or equal to after.t but </span><span class="si">{</span><span class="n">before</span><span class="o">.</span><span class="n">t</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">after</span><span class="o">.</span><span class="n">t</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">before</span><span class="o">.</span><span class="n">y</span> <span class="o">!=</span> <span class="n">after</span><span class="o">.</span><span class="n">x</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;before.y must be equal to after.x but </span><span class="si">{</span><span class="n">before</span><span class="o">.</span><span class="n">y</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">after</span><span class="o">.</span><span class="n">x</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">before</span> <span class="o">=</span> <span class="n">before</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">after</span> <span class="o">=</span> <span class="n">after</span></div>
+        
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;TradePair(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">x</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">y</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">after</span><span class="o">.</span><span class="n">y</span><span class="si">}</span><span class="s2">)&quot;</span>
+    
+<div class="viewcode-block" id="TradePair.as_series"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.TradePair.as_series">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">as_series</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Convert to pandas.Series.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">([</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">order_id</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">after</span><span class="o">.</span><span class="n">order_id</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">t</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">after</span><span class="o">.</span><span class="n">t</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">q</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">q</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">after</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">q</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">code</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">after</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">rate</span><span class="o">.</span><span class="n">r</span><span class="p">,</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">after</span><span class="o">.</span><span class="n">rate</span><span class="o">.</span><span class="n">r</span><span class="p">,</span>
+                            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">before</span><span class="o">.</span><span class="n">rate</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">after</span><span class="o">.</span><span class="n">rate</span><span class="p">)</span><span class="o">.</span><span class="n">r</span><span class="p">,</span>
+                         <span class="p">],</span> <span class="n">index</span><span class="o">=</span><span class="n">TRADE</span><span class="o">.</span><span class="n">TRADE_PAIR_COLUMNS</span><span class="p">)</span></div></div>
+        
+<div class="viewcode-block" id="History"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History">[ドキュメント]</a><span class="k">class</span> <span class="nc">History</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Keep all transactions in a dataframe.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="History.from_dataframe"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.from_dataframe">[ドキュメント]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">from_dataframe</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">copy</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">History</span><span class="p">()</span>
+        <span class="n">ret</span><span class="o">.</span><span class="n">_df</span> <span class="o">=</span> <span class="n">df</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">copy</span> <span class="k">else</span> <span class="n">df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">ret</span></div>
+    
+<div class="viewcode-block" id="History.__init__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.__init__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trade</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Trade</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Trade</span><span class="p">]]]</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        trade : Union[Trade, Iterable[Trade]], optional</span>
+<span class="sd">            A trade or a list of trades.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([],</span> <span class="n">columns</span><span class="o">=</span><span class="n">TRADE</span><span class="o">.</span><span class="n">TRADE_COLUMNS</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">trade</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">trade</span><span class="p">)</span></div>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">df</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Return the copy of history dataframe.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    
+<div class="viewcode-block" id="History.copy"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.copy">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">History</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Return the copy of history.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">History</span><span class="o">.</span><span class="n">from_dataframe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_df</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Trade</span><span class="o">.</span><span class="n">from_series</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+    
+<div class="viewcode-block" id="History.add"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.add">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trade</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Trade</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Trade</span><span class="p">],</span> <span class="n">History</span><span class="p">]],</span> <span class="n">copy</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">History</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Add a trade or a list of trades to the history.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">hist</span> <span class="o">=</span> <span class="bp">self</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">copy</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">trade</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">hist</span>
+        
+        <span class="n">df</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">trade</span><span class="p">,</span> <span class="n">History</span><span class="p">):</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">trade</span><span class="o">.</span><span class="n">_df</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">trade</span><span class="p">,</span> <span class="n">Trade</span><span class="p">):</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([</span> <span class="n">trade</span><span class="o">.</span><span class="n">as_series</span><span class="p">()</span> <span class="p">])</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">trade</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">):</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([</span> <span class="n">t</span><span class="o">.</span><span class="n">as_series</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trade</span> <span class="p">])</span>
+        
+        <span class="k">if</span> <span class="n">df</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;trade must be type of Trade or Iterable[Trade]&quot;</span><span class="p">)</span>
+            
+        <span class="n">hist</span><span class="o">.</span><span class="n">_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">hist</span><span class="o">.</span><span class="n">_df</span><span class="p">,</span> <span class="n">df</span><span class="p">])</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">hist</span></div>
+    
+<div class="viewcode-block" id="History.drop"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.drop">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">drop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Drop the records which specified by idx.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_df</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="History.as_trade_list"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.as_trade_list">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">as_trade_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                      <span class="n">sort_by</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                      <span class="n">ascending</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">bool</span><span class="p">]]]</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Trade</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Decompose history to a list of trades</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">sort_by</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="n">sort_by</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="n">ascending</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span> <span class="n">Trade</span><span class="o">.</span><span class="n">from_series</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()</span> <span class="p">]</span></div>
+    
+<div class="viewcode-block" id="History.get_pair_trade_index"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.get_pair_trade_index">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">get_pair_trade_index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trade</span><span class="p">:</span> <span class="n">Trade</span><span class="p">,</span> <span class="n">ascending</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the index of previous trades that should be paired with the trade.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_df</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">_df</span><span class="p">[</span><span class="s1">&#39;from&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">trade</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">code</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_df</span><span class="p">[</span><span class="s1">&#39;to&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">trade</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">code</span><span class="p">)]</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;t&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">trade</span><span class="o">.</span><span class="n">t</span><span class="p">]</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="n">ascending</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Index</span><span class="p">([])</span>
+        
+        <span class="n">amount</span> <span class="o">=</span> <span class="n">trade</span><span class="o">.</span><span class="n">x</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="n">idx</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="n">Yt</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">Yt</span> <span class="o">&gt;=</span> <span class="n">amount</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">amount</span> <span class="o">-=</span> <span class="n">Yt</span>
+        
+        <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">index</span></div>
+    
+<div class="viewcode-block" id="History.settle"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.settle">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">settle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trade</span><span class="p">:</span> <span class="n">Trade</span><span class="p">,</span> <span class="n">ascending</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">copy</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">pair_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_pair_trade_index</span><span class="p">(</span><span class="n">trade</span><span class="p">,</span> <span class="n">ascending</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pair_idx</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="p">,</span> <span class="kc">None</span>
+        
+        <span class="n">report</span> <span class="o">=</span> <span class="n">Report</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">pair_idx</span><span class="p">:</span>
+            <span class="n">pair</span><span class="p">,</span> <span class="n">trade</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">settle</span><span class="p">(</span><span class="n">trade</span><span class="p">)</span>
+            <span class="n">report</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">pair</span><span class="p">)</span>
+        
+        <span class="n">hist</span> <span class="o">=</span> <span class="bp">self</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">copy</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">hist</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">pair_idx</span><span class="p">)</span>
+        <span class="n">hist</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">trade</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">hist</span><span class="p">,</span> <span class="n">report</span></div>
+    
+<div class="viewcode-block" id="History.close"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.close">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Divide trades to date into those with confirmed</span>
+<span class="sd">        profits or losses and those that have yet to be confirmed.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">trade_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">as_trade_list</span><span class="p">(</span><span class="n">sort_by</span><span class="o">=</span><span class="s1">&#39;t&#39;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        
+        <span class="n">hist</span> <span class="o">=</span> <span class="n">History</span><span class="p">()</span>
+        
+        <span class="n">hist</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">trade_list</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+        
+        <span class="n">report</span> <span class="o">=</span> <span class="n">Report</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">trade</span> <span class="ow">in</span> <span class="n">trade_list</span><span class="p">:</span>
+            <span class="n">hist</span><span class="p">,</span> <span class="n">settled</span> <span class="o">=</span> <span class="n">hist</span><span class="o">.</span><span class="n">settle</span><span class="p">(</span><span class="n">trade</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">settled</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">hist</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">trade</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">report</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">settled</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">hist</span><span class="p">,</span> <span class="n">report</span></div>
+    
+<div class="viewcode-block" id="History.group_by_code"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.group_by_code">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">group_by_code</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_df</span>
+        
+        <span class="n">group</span> <span class="o">=</span> <span class="p">[</span> <span class="s1">&#39;-&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;from&#39;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;to&#39;</span><span class="p">]])</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()</span> <span class="p">]</span>
+        <span class="n">group</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">group</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="History.describe"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.describe">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">code_from</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">code_to</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_df</span>
+        
+        <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[(</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;from&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">code_from</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;to&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">code_to</span><span class="p">)]</span>
+        
+        <span class="n">rate_mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="k">if</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">rate_mean</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+        <span class="n">vmin</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+        <span class="n">mins</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">vmin</span><span class="p">]</span>
+
+        <span class="n">vmax</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+        <span class="n">maxs</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;R(yt/xt)&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">vmax</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">([</span><span class="n">code_from</span><span class="p">,</span>
+                          <span class="n">code_to</span><span class="p">,</span>
+                          <span class="n">Fraction</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+                          <span class="n">Fraction</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+                          <span class="n">df</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span>
+                          <span class="n">df</span><span class="p">[</span><span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span>
+                          <span class="n">rate_mean</span><span class="p">,</span>
+                          <span class="n">mins</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span>
+                          <span class="n">mins</span><span class="p">[</span><span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span>
+                          <span class="n">vmin</span><span class="p">,</span>
+                          <span class="n">maxs</span><span class="p">[</span><span class="s1">&#39;X(t)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span>
+                          <span class="n">maxs</span><span class="p">[</span><span class="s1">&#39;Y(t+dt)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span>
+                          <span class="n">vmax</span><span class="p">,</span>
+                         <span class="p">],</span> <span class="n">index</span><span class="o">=</span><span class="n">TRADE</span><span class="o">.</span><span class="n">TRADE_SUMMARY_COLUMNS</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="History.summarize"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.History.summarize">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">summarize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">origin</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">hist</span><span class="p">,</span> <span class="n">report</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        
+        <span class="n">ret</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">report</span><span class="o">.</span><span class="n">_df</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">idx_dict</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">group_by_code</span><span class="p">()</span><span class="o">.</span><span class="n">indices</span>
+            <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">idx_dict</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="n">rep</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+
+                <span class="n">code_X</span> <span class="o">=</span> <span class="n">rep</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;code_X&#39;</span><span class="p">]</span>
+                <span class="n">code_Y</span> <span class="o">=</span> <span class="n">rep</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;code_Y&#39;</span><span class="p">]</span>
+
+                <span class="n">pos_idx</span> <span class="o">=</span> <span class="p">(</span><span class="n">hist</span><span class="o">.</span><span class="n">_df</span><span class="p">[</span><span class="s1">&#39;from&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">code_X</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">hist</span><span class="o">.</span><span class="n">_df</span><span class="p">[</span><span class="s1">&#39;to&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">code_Y</span><span class="p">)</span>
+                <span class="n">pos</span> <span class="o">=</span> <span class="n">History</span><span class="o">.</span><span class="n">from_dataframe</span><span class="p">(</span><span class="n">hist</span><span class="o">.</span><span class="n">_df</span><span class="p">[</span><span class="n">pos_idx</span><span class="p">],</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                
+                <span class="n">desc</span> <span class="o">=</span> <span class="n">pos</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">code_X</span><span class="p">,</span> <span class="n">code_Y</span><span class="p">)</span>
+                <span class="n">desc</span><span class="p">[</span><span class="s1">&#39;used&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rep</span><span class="p">[</span><span class="s1">&#39;X(s)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+                <span class="n">desc</span><span class="p">[</span><span class="s1">&#39;earned&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rep</span><span class="p">[</span><span class="s1">&#39;Z(t+dt)&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+                <span class="n">ret</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">desc</span><span class="p">)</span>
+        
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">TRADE</span><span class="o">.</span><span class="n">TRADE_SUMMARY_COLUMNS</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">hist</span><span class="o">.</span><span class="n">_df</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">idx_dict</span> <span class="o">=</span> <span class="n">hist</span><span class="o">.</span><span class="n">group_by_code</span><span class="p">()</span><span class="o">.</span><span class="n">indices</span>
+            <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">idx_dict</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="n">rec</span> <span class="o">=</span> <span class="n">hist</span><span class="o">.</span><span class="n">_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+
+                <span class="n">code_X</span> <span class="o">=</span> <span class="n">rec</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;from&#39;</span><span class="p">]</span>
+                <span class="n">code_Y</span> <span class="o">=</span> <span class="n">rec</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;to&#39;</span><span class="p">]</span>
+            
+                <span class="n">pos</span> <span class="o">=</span> <span class="n">df</span><span class="p">[(</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;capital&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">code_X</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;via&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">code_Y</span><span class="p">)]</span>
+                
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pos</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">break</span>
+                
+                <span class="n">desc</span> <span class="o">=</span> <span class="n">History</span><span class="o">.</span><span class="n">from_dataframe</span><span class="p">(</span><span class="n">rec</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">code_X</span><span class="p">,</span> <span class="n">code_Y</span><span class="p">)</span>
+                <span class="n">ret</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">desc</span><span class="p">)</span>
+            
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">df</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">ret</span><span class="p">)],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">origin</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;capital&#39;</span><span class="p">,</span> <span class="s1">&#39;via&#39;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">primary_idx</span> <span class="o">=</span> <span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;capital&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">origin</span><span class="p">)</span>
+            <span class="n">secondary_idx</span> <span class="o">=</span> <span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;via&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">origin</span><span class="p">)</span>
+        
+            <span class="n">primary_df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">primary_idx</span><span class="p">]</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;via&#39;</span><span class="p">])</span>
+            <span class="n">secondary_df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">secondary_idx</span><span class="p">]</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;capital&#39;</span><span class="p">])</span>
+            <span class="n">other_df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="o">~</span><span class="n">primary_idx</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">secondary_idx</span><span class="p">]</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;capital&#39;</span><span class="p">,</span> <span class="s1">&#39;via&#39;</span><span class="p">])</span>
+            
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">primary_df</span><span class="p">,</span> <span class="n">secondary_df</span><span class="p">,</span> <span class="n">other_df</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            
+        <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div></div>
+    
+<div class="viewcode-block" id="Report"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Report">[ドキュメント]</a><span class="k">class</span> <span class="nc">Report</span><span class="p">:</span>
+<div class="viewcode-block" id="Report.from_dataframe"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Report.from_dataframe">[ドキュメント]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">from_dataframe</span><span class="p">(</span><span class="n">df</span><span class="p">):</span>
+        <span class="n">ret</span> <span class="o">=</span> <span class="n">Report</span><span class="p">()</span>
+        <span class="n">ret</span><span class="o">.</span><span class="n">_df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">ret</span></div>
+    
+<div class="viewcode-block" id="Report.__init__"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Report.__init__">[ドキュメント]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trade_pair</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">TradePair</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TradePair</span><span class="p">]]]</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([],</span> <span class="n">columns</span><span class="o">=</span><span class="n">TRADE</span><span class="o">.</span><span class="n">TRADE_PAIR_COLUMNS</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">trade_pair</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">trade_pair</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Report.copy"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Report.copy">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">copy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Report</span><span class="o">.</span><span class="n">from_dataframe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_df</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Report.add"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Report.add">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trade_pair</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">TradePair</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">TradePair</span><span class="p">],</span> <span class="n">Report</span><span class="p">]],</span> <span class="n">copy</span><span class="p">:</span> <span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">trade_pair</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        
+        <span class="n">rep</span> <span class="o">=</span> <span class="bp">self</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">copy</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        
+        <span class="n">df</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">trade_pair</span><span class="p">,</span> <span class="n">Report</span><span class="p">):</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">trade_pair</span><span class="o">.</span><span class="n">_df</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">trade_pair</span><span class="p">,</span> <span class="n">TradePair</span><span class="p">):</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([</span> <span class="n">trade_pair</span><span class="o">.</span><span class="n">as_series</span><span class="p">()</span> <span class="p">])</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">trade_pair</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">):</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([</span> <span class="n">tp</span><span class="o">.</span><span class="n">as_series</span><span class="p">()</span> <span class="k">for</span> <span class="n">tp</span> <span class="ow">in</span> <span class="n">trade_pair</span> <span class="p">])</span>
+        
+        <span class="k">if</span> <span class="n">df</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;trade_pair must be type of TradePair or Iterable[TradePair]&quot;</span><span class="p">)</span>
+        
+        <span class="n">rep</span><span class="o">.</span><span class="n">_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">rep</span><span class="o">.</span><span class="n">_df</span><span class="p">,</span> <span class="n">df</span><span class="p">])</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">rep</span></div>
+    
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">df</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    
+<div class="viewcode-block" id="Report.as_trade_pair_list"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Report.as_trade_pair_list">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">as_trade_pair_list</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span> <span class="n">TradePair</span><span class="o">.</span><span class="n">from_series</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()</span> <span class="p">]</span></div>
+    
+<div class="viewcode-block" id="Report.group_by_code"><a class="viewcode-back" href="../../modules/fxtrade.html#fxtrade.trade.Report.group_by_code">[ドキュメント]</a>    <span class="k">def</span> <span class="nf">group_by_code</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_df</span>
+        
+        <span class="n">group</span> <span class="o">=</span> <span class="p">[</span> <span class="s1">&#39;-&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;code_X&#39;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;code_Y&#39;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;code_Z&#39;</span><span class="p">]])</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()</span> <span class="p">]</span>
+        <span class="n">group</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">group</span><span class="p">)</span></div></div>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">クイック検索</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="検索" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="総合索引"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Pythonモジュール索引"
+             >モジュール</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">fxtrade 0.0.6 ドキュメント</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >モジュールコード</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">fxtrade.trade</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2022, Josh Nobus.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.1.1.
+    </div>
+  </body>
+</html>
