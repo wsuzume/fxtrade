@@ -1,3 +1,7 @@
+"""
+Utilities to assist in processing time series data.
+"""
+
 import numpy as np
 import pandas as pd
 
@@ -14,7 +18,10 @@ MINUTES = {'1m': 1, '5m': 5, '10m': 10, '15m': 15, '30m': 30, }
 HOURS = {'1h': 1, '3h': 3, '6h': 6, '12h': 12, }
 DAYS = {'1d': 1, '3d': 3, '5d': 5, '7d': 7, }
 
-def delta(ts: Iterable):
+def delta(ts: Iterable) -> pd.Timedelta:
+    """
+    Given an equally spaced time index, return the interval.
+    """
     dts = pd.Series(ts).diff().value_counts()
     if len(dts) != 1:
         raise ValueError("all timedelta must be the same")
@@ -22,6 +29,10 @@ def delta(ts: Iterable):
     return dts.index[0]
 
 def to_timedelta(interval: str) -> pd.Timedelta:
+    """
+    Convert a string representing a period of time,
+    such as '1d' or '1h', to pandas.Timedelta.
+    """
     if interval not in INTERVALS:
         raise ValueError(f"interval must be one of {INTERVALS}")
     
@@ -35,7 +46,11 @@ def to_timedelta(interval: str) -> pd.Timedelta:
     raise RuntimeError("unknown error")
     
 # ダウンサンプリング & 中途半端な時間に取得したデータを削除
-def down_sampling(df: pd.DataFrame, interval):
+def down_sampling(df: pd.DataFrame, interval: str):
+    """
+    Return dataframe which is applied down sampling with specified interval.
+    Data recorded at the halfway point will be deleted.
+    """
     if interval not in INTERVALS:
         raise ValueError(f"interval must be one of {INTERVALS}")
     
@@ -141,13 +156,13 @@ def validate_index(df):
     
     return {'ascending': ascending}
 
-def this_year_first(t):
+def this_year_first(t: pd.Timestamp):
     return datetime(t.year, 1, 1)
 
-def next_year_first(t):
+def next_year_first(t: pd.Timestamp):
     return datetime(t.year+1, 1, 1)
 
-def count_years(begin, end):
+def count_years(begin: pd.Timestamp, end: pd.Timestamp):
     return end.year - begin.year
 
 def add_years(t, dy):
