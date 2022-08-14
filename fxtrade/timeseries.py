@@ -18,6 +18,26 @@ MINUTES = {'1m': 1, '5m': 5, '10m': 10, '15m': 15, '30m': 30, }
 HOURS = {'1h': 1, '3h': 3, '6h': 6, '12h': 12, }
 DAYS = {'1d': 1, '3d': 3, '5d': 5, '7d': 7, }
 
+def with_timestamp(x=None, scope='day', format_str=None):
+    fmt = {
+        'year': '%Y',
+        'month': '%Y%m',
+        'day': '%Y%m%d',
+        'hour': '%Y%m%dT%H',
+        'minute': '%Y%m%dT%H%M',
+        'second': '%Y%m%dT%H-%M-%S',
+        'millisecond': '%Y%m%dT%H-%M-%S-%f',
+    }
+    
+    format_str = fmt[scope] if format_str is None else format_str
+    
+    t = datetime.datetime.now()
+    tstamp = t.strftime(format_str)
+    
+    if x is None:
+        return tstamp
+    return f'{tstamp}_{x}'
+
 def delta(ts: Iterable) -> pd.Timedelta:
     """
     Given an equally spaced time index, return the interval.
