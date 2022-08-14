@@ -84,6 +84,55 @@ def emvariances(xs: pd.Series, alpha: float, dt: pd.Timedelta):
     ema = emaverage(xs, alpha, dt)
     return emaverage((xs - ema) ** 2, alpha, dt)
 
+def trend_from_emaverage(ema: pd.Series, alpha: float, dt: pd.Timedelta) -> pd.Series:
+    """
+    Return calculated trend from EMA. Parameters alpha and dt should be the same with
+    which you used to calculate EMA.
+    """
+    return emaverage(ema.diff(), alpha=self.alpha, dt=self.dt)
+
+def trend(xs: pd.Series, alpha: float, dt: pd.Timedelta) -> pd.Series:
+    """
+    Return calculated trend from xs.
+    """
+    ema = emaverage(xs, alpha=self.alpha, dt=self.dt)
+    return trend_from_emaverage(ema, alpha=self.alpha, dt=self.dt)
+
+def turning_point(xs: pd.Series, alpha: float, dt: pd.Timedelta) -> Tuple[pd.Series, pd.Series]:
+    """
+    Return the turning points of the trend.
+    """
+    ema = emaverage(xs, alpha=self.alpha, dt=self.dt)
+    trend = trend_from_emaverage(ema, alpha=self.alpha, dt=self.dt)
+    
+    ema = ema.loc[trend.index]
+    uptrend = ema.loc[(((trend > 0).astype(float)).diff() > 0).values]
+    downtrend = ema.loc[(((trend > 0).astype(float)).diff() < 0).values]
+
+    return uptrend, downtrend
+
+def rise(xs: pd.Series, window=3, p=0.4) -> pd.Series:
+    """
+    Return the rising points.
+    """
+    dif = xs.rolling(window).sum()
+    prob = estimate_probability(xs, window)
+
+    rise = prob[(dif > 0) & (prob < p)]
+
+    return rise
+
+def fall(xs: pd.Series, window=3, p=0.2) -> pd.Series:
+    """
+    Return the falling points
+    """
+    dif = xs.rolling(window).sum()
+    prob = estimate_probability(xs, window)
+    
+    fall = prob[(dif < 0) & (prob < 0.2)]
+
+    return fall
+
 def infinite_trade_result(
         low: pd.Series,
         low_base: pd.Series,
@@ -318,7 +367,7 @@ def calc_brown_param(scale: float, dt: pd.Timedelta) -> float:
     dt : pandas.Timedelta
         Any positive pandas.Timedelta.
     """
-    return scale * np.sqrt(t.total_seconds())
+    return scale * np.sqrt(dt.total_seconds())
 
 def estimate_probability(
         xs: pd.Series,
