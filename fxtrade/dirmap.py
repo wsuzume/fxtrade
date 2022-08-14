@@ -1,4 +1,3 @@
-import datetime
 import os
 import shutil
 
@@ -8,142 +7,113 @@ from pathlib import Path
 
 from typing import Callable, Iterable, Mapping
 
-def with_timestamp(x=None, scope='day', format_str=None):
-    fmt = {
-        'year': '%Y',
-        'month': '%Y%m',
-        'day': '%Y%m%d',
-        'hour': '%Y%m%dT%H',
-        'minute': '%Y%m%dT%H%M',
-        'second': '%Y%m%dT%H-%M-%S',
-        'millisecond': '%Y%m%dT%H-%M-%S-%f',
-    }
-    
-    format_str = fmt[scope] if format_str is None else format_str
-    
-    t = datetime.datetime.now()
-    tstamp = t.strftime(format_str)
-    
-    if x is None:
-        return tstamp
-    return f'{tstamp}_{x}'
-
 class Directory:
+    """
+    Make easy to manipulate directories.
+    """
     def __init__(self, path, default_query='*'):
-        if path is None:
-            self._path = None
-        elif isinstance(path, Path):
+        if isinstance(path, Path):
             self._path = path
         elif isinstance(path, Directory):
             self._path = path.path
         else:
             self._path = Path(path)
             
-        self.default_query = '*'
-    
-    @property
-    def is_valid(self):
-        return self._path is not None
-    
-    def raise_for_invalid(self):
-        if not self.is_valid:
-            raise ValueError(f"invalid directory: path is None")
-    
+        self.default_query = default_query
+
     @property
     def path(self):
+        """Return the path of the directory.
+        """
         return self._path
     
     def __str__(self):
-        self.raise_for_invalid()
-        return str(self._path)
+        return str(self.path)
     
     def __repr__(self):
-        if not self.is_valid:
-            return "InvalidDirectory"
-        return f"Directory('{str(self._path)}')"
+        return f"Directory('{str(self.path)}')"
     
     def __len__(self):
+        """Return the number of files and directories which are contained in the directory.
+        """
         return len(self.glob())
     
     def __iter__(self):
+        """Return files and directories iteratively (not sorted).
+        """
         return self.iglob()
     
     def __truediv__(self, other):
-        if not self.is_valid:
-            return Directory(other)
-        return Directory(self._path / other)
+        """Return the directory to which the paths are joined. (inherit=False)
+        """
+        return self.join(other, inherit=False)
+    
+    def join(self, other, inherit=False):
+        """Return the directory to which the paths are joined.
+        """
+        if isinstance(other, Directory):
+            other = other.path
 
-    def cd(self, name):
-        self.raise_for_invalid()
-        
-        query = str(self._path / self.default_query)
-        dirs = set([ os.path.basename(p) for p in glob(query) if os.path.isdir(p) ])
-        
-        if name not in dirs:
-            raise FileNotFoundError(f"directory '{name}' not in '{self._path}'")
-        
-        return Directory(self._path / name)
-        
-    def __getitem__(self, key):
-        self.raise_for_invalid()
-        return self.cd(key)
-    
-    def __delitem__(self, key):
-        self.raise_for_invalid()
-        dest = self.cd(key)
-        dest.rmtree()
-    
-    def exists(self):
-        self.raise_for_invalid()
-        return self._path.exists()
-    
-    def ensure(self, verbose=False):
-        if self._path is None:
-            status = 'Skipped'
-        elif self.exists():
-            status = 'OK'
-        else:
-            os.makedirs(str(self._path), exist_ok=True)
-            status = 'Created'
-        if verbose:
-            x = f"'{str(self._path)}'" if self._path is not None else 'None'
-            print(f"Directory: {x}  ... {status}")
-        return self
-    
-    def mkdir(self, name):
-        self.raise_for_invalid()
-        os.mkdir(str(self / name))
-    
-    def makedirs(self, name, exist_ok=False):
-        self.raise_for_invalid()
-        os.makedirs(str(self / name), exist_ok=exist_ok)
-    
-    def rmdir(self):
-        self.raise_for_invalid()
-        os.rmdir(str(self))
-    
-    def rmtree(self):
-        self.raise_for_invalid()
-        shutil.rmtree(str(self))
+        if inherit:
+            return Directory(self.path / other, self.default_query)
+        return Directory(self.path / other)
 
-    def glob(self, query=None, recursive=False):
-        self.raise_for_invalid()
-        query = query if query is not None else self.default_query
-        return glob(str(self.path / query), recursive=recursive)
+    def absolute(self):
+        """Return the absolute path of the directory.
+        """
+        return Directory(self.path.absolute())
+
+    def files(self, sort=True, wrap=False):
+        """Return all files which are contained in the directory.
+        """
+        query = str(self.path / '*')
+        files = [ os.path.basename(p) for p in glob(query) if os.path.isfile(p) ]
+
+        files = files if not sort else sorted(files)
+
+        if not wrap:
+            return files
+        return [ Path(f) for f in files ]
     
-    def iglob(self, query=None, recursive=False):
-        self.raise_for_invalid()
-        query = query if query is not None else self.default_query
-        return iglob(str(self.path / query), recursive=recursive)
-    
-    def now(self, name=None, scope='day', format_str=None):
-        self.raise_for_invalid()
-        return self.path / with_timestamp(name, scope, format_str)
+    def dirs(self, sort=True, wrap=False):
+        """Return all directories which are contained in the directory.
+        """
+        query = str(self.path / '*')
+        dirs = [ os.path.basename(p) for p in glob(query) if os.path.isdir(p) ]
+
+        dirs = dirs if not sort else sorted(dirs)
+
+        if not wrap:
+            return dirs
+        return [ Directory(d) for d in dirs ]
+
+    def cd(self, key, inherit=False, return_None=False):
+        """Return the directory which is specified by the key. The specified directory must be exist,
+        otherwise raises FileNotFoundError or return None.
+        """
+        if isinstance(key, int):
+            dirs = self.dirs(sort=True, wrap=False)
+            if len(dirs) == 0:
+                if return_None:
+                    return None
+                raise FileNotFoundError(f"No directory in '{self.path}'")
+            
+            if key >= len(dirs):
+                if return_None:
+                    return None
+                raise FileNotFoundError(f"File index out of range")
+
+            return self.join(dirs[key], inherit=inherit)
+
+        dirs = set(self.dirs(sort=False, wrap=False))
+        if key not in dirs:
+            raise FileNotFoundError(f"directory '{key}' not in '{self.path}'")
+        
+        return self.join(key, inherit=inherit)
     
     def iloc(self, idx, return_None=False):
-        if not self.is_valid:
-            return None
-        
+        """Return file or directory specified by index in lexicographic order.
+        """
         ps = sorted(self.glob())
         if len(ps) == 0:
             if return_None:
@@ -160,12 +130,89 @@ class Directory:
         if os.path.isdir(p):
             return Directory(p)
         return Path(p)
-    
+
     def first(self, return_None=True):
+        """Return the first file or directory specified by index in lexicographic order.
+        """
         return self.iloc(0, return_None)
     
     def last(self, return_None=True):
+        """Return the last file or directory specified by index in lexicographic order.
+        """
         return self.iloc(-1, return_None)
+
+    def __getitem__(self, key):
+        """Return the directory which is specified by the key. The specified directory must be exist,
+        otherwise raises FileNotFoundError.
+        """
+        return self.cd(key)
+    
+    def __delitem__(self, key):
+        """Delete the directory which is specified by the key.
+        """
+        dest = self.cd(key)
+        dest.rmtree()
+    
+    def exists(self):
+        """Return whether a file or directory exists in the path.
+        """
+        return self.path.exists()
+    
+    def isfile(self):
+        return os.path.isfile(str(self.path))
+    
+    def isdir(self):
+        return os.path.isdir(str(self.path))
+    
+    def ensure(self, is_file_ok=False, verbose=False):
+        """Check whether the directory is exist or not,
+        and create if it doesn't exists.
+        """
+        if self.isfile():
+            if not is_file_ok:
+                raise RuntimeError('File exists at the path.')
+            status = 'OK'
+        elif self.isdir():
+            status = 'OK'
+        else:
+            self.makedirs(exist_ok=True)
+            status = 'Created'
+        if verbose:
+            x = f"'{str(self.path)}'"
+            print(f"Directory: {x}  ... {status}")
+        return self
+    
+    def mkdir(self, name=None):
+        if name is None:
+            os.mkdir(str(self))
+        else:
+            os.mkdir(str(self / name))
+    
+    def makedirs(self, name=None, exist_ok=False):
+        if name is None:
+            os.makedirs(str(self), exist_ok=exist_ok)
+        else:
+            os.makedirs(str(self / name), exist_ok=exist_ok)
+    
+    def rmdir(self, name=None):
+        if name is None:
+            os.rmdir(str(self))
+        else:
+            os.rmdir(str(self / name))
+
+    def rmtree(self, name=None):
+        if name is None:
+            shutil.rmtree(str(self))
+        else:
+            shutil.rmtree(str(self / name))
+
+    def glob(self, query=None, recursive=False):
+        query = query if query is not None else self.default_query
+        return glob(str(self.path / query), recursive=recursive)
+    
+    def iglob(self, query=None, recursive=False):
+        query = query if query is not None else self.default_query
+        return iglob(str(self.path / query), recursive=recursive)
         
 class DirMap:
     def __init__(self, root_dir='.', default_query='*'):
@@ -211,7 +258,7 @@ class DirMap:
     def cd(self, name, inherit=False, raise_for_invalid=True):
         if self._branch[name] is None:
             if raise_for_invalid:
-                Directory(self._branch[name]).raise_for_invalid()
+                raise FileNotFoundError("directory not exists")
             else:
                 return None
             
