@@ -50,6 +50,10 @@ def response_to_dataframe(response):
     return df
 
 class YahooFinanceAPI(ChartAPI):
+    @staticmethod
+    def make_ticker(from_code, to_code):
+        return f"{from_code.upper()}-{to_code.upper()}"
+        
     def __init__(self, api_key):
         self.api_key = api_key
         
@@ -64,9 +68,9 @@ class YahooFinanceAPI(ChartAPI):
     @property
     def intervals(self):
         return ['1m', '5m', '15m', '1d', '1wk', '1mo']
-    
+
     @property
-    def max_crange(self, interval):
+    def max_cranges(self):
         return {
             '1d': '10y',
             '15m': '1mo',
@@ -110,14 +114,6 @@ class YahooFinanceAPI(ChartAPI):
     @property
     def empty(self):
         return pd.DataFrame([], columns=['timestamp', 'open', 'close', 'high', 'low', 'volume'])
-    
-    @property
-    def now(self):
-        return ('5d', '1m')
-    
-    @property
-    def maxlong(self):
-        return ('10y', '1d')
     
     def download(self, ticker, crange, interval, t=None, as_dataframe=True):
         if t is not None:

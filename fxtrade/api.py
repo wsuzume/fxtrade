@@ -1,10 +1,15 @@
 from abc import ABC, abstractmethod
 
 class ChartAPI(ABC):
+    @staticmethod
+    @abstractmethod
+    def make_ticker(from_code, to_code):
+        pass
+
     @abstractmethod
     def __init__(self, api_key):
         pass
-    
+
     @property
     @abstractmethod
     def tickers(self):
@@ -22,7 +27,7 @@ class ChartAPI(ABC):
     
     @property
     @abstractmethod
-    def max_crange(self):
+    def max_cranges(self):
         pass
     
     @property
@@ -49,17 +54,7 @@ class ChartAPI(ABC):
     @abstractmethod
     def empty(self):
         pass
-    
-    @property
-    @abstractmethod
-    def now(self):
-        pass
-    
-    @property
-    @abstractmethod
-    def maxlong(self):
-        pass
-    
+
     @abstractmethod
     def download(self, ticker, crange, interval, t, as_dataframe):
         pass
@@ -75,6 +70,11 @@ class ChartAPI(ABC):
         return self.download(ticker, crange, interval, as_dataframe)
 
 class TradeAPI(ABC):
+    @staticmethod
+    @abstractmethod
+    def make_ticker(from_code, to_code):
+        pass
+
     @abstractmethod
     def __init__(self, api_key, api_secret):
         pass
