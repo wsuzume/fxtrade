@@ -8,6 +8,8 @@ from .wallet import Wallet
 
 from .stocks import JPY, BTC
 
+from .emulator import TraderEmulatorAPI
+
 class Trader:
     def __init__(self,
                  api: Type[TradeAPI],
@@ -16,10 +18,9 @@ class Trader:
         self.api = api
         self.history = history
         self.dirmap = DirMap(root_dir=Path(data_dir))
-        
-    # TODO
-    def create_emulator(self):
-        return self
+    
+    def create_emulator(self, chart):
+        return TraderEmulatorAPI(chart)
     
     def get_wallet(self, codes=None):
         return self.api.get_balance().filter_stocks(codes)
@@ -39,7 +40,6 @@ class Trader:
     def get_history(self, start_date=None):
         return self.api.get_history(start_date)
     
-    
     def minimum_order_quantity(self, code):
         return self.api.minimum_order_quantity(code)
     
@@ -51,8 +51,6 @@ class Trader:
             raise ValueError('under minimum')
         if trade.y > self.maximum_order_quantity(trade.y.code):
             raise ValueError('over maximum')
-            
-        print(trade)
         
         return self.api.buy(float(trade.y.q))
     
@@ -63,3 +61,48 @@ class Trader:
             raise ValueError('over maximum')
             
         return self.api.sell(float(trade.x.q))
+
+
+class TraderEmulatorAPI(TradeAPI):
+    @staticmethod
+    def make_ticker(from_code, to_code):
+        pass
+
+    def __init__(self, chart):
+        self.chart = chart
+
+    def minimum_order_quantity(self, code):
+        qs = {
+            'BTC': BTC('0.001'),
+        }
+        return qs[code]
+    
+    def maximum_order_quantity(self, code):
+        qs = {
+            'BTC': BTC('1000'),
+        }
+        return qs[code]
+    
+    def get_balance(self):
+        pass
+    
+    def get_commission(self, product_code=None):
+        return Fraction('0.0015')
+    
+    def get_ticker(self, code):
+        pass
+    
+    def get_best_bid(self, code):
+        pass
+    
+    def get_best_ask(self, code):
+        pass
+    
+    def get_history(self, start_date=None):
+        pass
+    
+    def buy(self, size):
+        pass
+
+    def sell(self, size):
+        pass

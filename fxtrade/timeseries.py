@@ -159,6 +159,24 @@ def merge(df_prev: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
+def default_merge_function(df_prev, df):
+    return merge(df_prev, df)
+    
+def default_load_function(load_dir):
+    paths = sorted(list(load_dir.glob('*')))
+    if len(paths) == 0:
+        raise FileNotFoundError(f"No file to read in '{load_dir}'")
+
+    dfs = []
+    for path in paths:
+        dfs.append(pd.read_csv(path, index_col=0, parse_dates=True))
+
+    df_ret = dfs[0]
+    for df in dfs[1:]:
+        df_ret = default_merge_function(df_ret, df)
+
+    return df_ret.sort_index()
+
 def validate_index(df):
     idx_diff = pd.Series(df.index).diff().value_counts()
         

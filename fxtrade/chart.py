@@ -3,18 +3,26 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from copy import deepcopy
 from datetime import datetime
 from glob import glob
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import get_args, Any, Callable, Dict, List, Optional, Tuple, Type, Union, Iterable, Mapping
+
+from . import dirmap
 
 from .analysis import log10
 from .api import ChartAPI
-from .dirmap import Directory, DirMap
-from .emulator import ChartEmulatorAPI
-from .timeseries import merge, down_sampling, select, normalized_timeindex, get_first_timestamp, to_timedelta
+from .core import is_instance_list
+from .dirmap import DirMap
+from .timeseries import merge, down_sampling, select, \
+                        normalized_timeindex, get_first_timestamp, \
+                        to_timedelta
 
 def standardize(df: pd.DataFrame):
+    """
+    使用するカラムを選択する
+    """
     if not isinstance(df.index, pd.DatetimeIndex):
         raise TypeError("df.index must be type of pandas.DatetimeIndex")
         
@@ -26,6 +34,9 @@ def standardize(df: pd.DataFrame):
 def normalize(df: pd.DataFrame, interval: pd.Timedelta,
               ascending: bool = False,
               interpolate_columns: List[str]=['open', 'close', 'high', 'low', 'volume']) -> pd.DataFrame:
+    """
+    NaN で計算が滞らないように線形補間する
+    """
     df = df.copy()
     b = df.index[0]
     end = df.index[-1]
@@ -47,26 +58,225 @@ def normalize(df: pd.DataFrame, interval: pd.Timedelta,
     
     return df
 
-def read_csv(path):
+def default_read_function(path: Union[str, Path]) -> pd.DataFrame:
     return pd.read_csv(path, index_col=0, parse_dates=True)
 
-def default_merge_function(df_prev, df):
+def default_merge_function(df_prev: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     return merge(df_prev, df)
-    
-def default_load_function(chart, key):
-    paths = chart.dirmap[key].glob()
-    if len(paths) == 0:
-        raise FileNotFoundError(f"No file to read in '{chart.dirmap[key]}'")
 
+def default_glob_function(dir_path: Union[str, Path]) -> List[str]:
+    return sorted(list(Path(dir_path).glob('*.csv')))
+
+def default_load_function(paths: Iterable[Union[str, Path]]) -> pd.DataFrame:
     dfs = []
     for path in paths:
-        dfs.append(read_csv(path))
+        dfs.append(default_read_function(path))
 
     df_ret = dfs[0]
     for df in dfs[1:]:
         df_ret = default_merge_function(df_ret, df)
 
     return df_ret.sort_index()
+
+def default_save_function(
+                df: pd.DataFrame,
+                dir_path: Union[str, Path],
+                sections: Callable[[datetime, datetime], Iterable[Tuple[datetime, datetime]]],
+                format_string: str,
+                timestamp_filter: Callable[[datetime], bool]=None
+                ) -> Path:
+    save_dir = Path(dir_path)
+    dirmap.ensure(save_dir)
+
+    if len(df) == 0:
+        warnings.warn(UserWarning(f"dataframe size is zero: no data to save."))
+        return save_dir
+    
+    # 期間ごとに小分けにしてイテレート
+    for begin, end in sections(df.index[0], df.index[-1]):
+        save_name = begin.strftime(format_string)
+        path = save_dir / save_name
+        
+        # 小分けにしたデータフレーム
+        df_part = df[(df.index >= begin) & (df.index < end)]
+
+        # 過去に同期間が保存されていれば読み込んでマージ
+        if path.exists():
+            df_prev = default_read_function(path)
+            df_part = default_merge_function(df_prev, df_part)
+        
+        # 保存するデータを選択する
+        if timestamp_filter is not None:
+            save_idx = pd.Series(df_part.index).apply(
+                            timestamp_filter
+                        )
+            df_part = df_part.loc[save_idx.values]
+        
+        # 保存する
+        df_part.to_csv(path, index=True)
+    
+    return save_dir
+
+class Board:
+    def __init__(self,
+                 ticker: str,
+                 crange_interval: str,
+                 api: Type[ChartAPI],
+                 df: pd.DataFrame=None,
+                 refresh_limit=None):
+        self.ticker = ticker
+        self.crange_interval = crange_interval
+        self.api = api
+        self.df = df if df is not None else self.api.empty
+        self.refresh_limit = refresh_limit
+    
+    def __repr__(self):
+        return f"Board('{self.ticker}', '{self.crange_interval}')"
+
+    def copy(self):
+        return Board(ticker=self.ticker,
+                     crange_interval=self.crange_interval,
+                     api=self.api,
+                     df=self.df.copy(),
+                     refresh_limit=self.refresh_limit)
+
+    @property
+    def last_updated(self):
+        if len(self.df) == 0:
+            return None
+        
+        return self.df.index[-1]
+
+    def should_be_updated(self, refresh_limit=None):
+        if refresh_limit is None:
+            refresh_limit = self.refresh_limit
+
+        if refresh_limit is None:
+            return True
+        if self.last_updated is None:
+            return True
+        
+        now = pd.Timestamp.now()
+        if (now - self.last_updated) > refresh_limit:
+            return True
+        
+        return False
+    
+    def flush(self):
+        self.df = self.api.empty
+        return self.df
+    
+    def download(self, t=None):
+        crange, interval = self.crange_interval.split('-')
+        df = self.api.download(ticker=self.ticker,
+                               crange=crange,
+                               interval=interval,
+                               t=t)
+        
+        if t is not None:
+            self.df = self.df[self.df.index <= t].copy()
+
+        return standardize(df)
+    
+    def update(self, t=None, df: pd.DataFrame=None, merge_function=None):
+        if merge_function is None:
+            merge_function = default_merge_function
+
+        if df is None:
+            df = self.download(t=t)
+        self.df = merge_function(self.df, df)
+        return self
+
+    def sync(self, dir_path, t=None, update=True, refresh_limit=None, glob_function=None, load_function=None, merge_function=None):
+        if glob_function is None:
+            glob_function = default_glob_function
+        if load_function is None:
+            load_function = default_load_function
+        if merge_function is None:
+            merge_function = default_merge_function
+
+        load_dir = Path(dir_path)
+        if load_dir.exists():
+            paths = glob_function(load_dir)
+            if len(paths) != 0:
+                # ディレクトリが存在し、かつ読み込むべきファイルも存在する
+                self.df = self.load(load_dir, t=t, glob_function=glob_function, load_function=load_function)
+        
+        if not self.should_be_updated(refresh_limit):
+            return self
+
+        if update:
+            self.update(t=t, merge_function=merge_function)
+            self.save(dir_path)
+
+        return self
+
+    def load(self, dir_path, t=None, glob_function=None, load_function=None):
+        if glob_function is None:
+            glob_function = default_glob_function
+        if load_function is None:
+            load_function = default_load_function
+
+        key = self.crange_interval
+        fmt = self.api.default_save_fstring[key]
+
+        if t is None:
+            f = lambda x: True
+            g = lambda idx: idx
+        elif isinstance(t, datetime):
+            f = lambda x: datetime.strptime(x.name, fmt) <= t
+            g = lambda idx: idx
+        elif is_instance_list(t, datetime, 2):
+            f = lambda x: t[0] <= datetime.strptime(x.name, fmt) <= t[1]
+            g = lambda idx: list(filter(lambda x: x >= 0, [idx[0] - 1] + list(idx)))
+        else:
+            raise TypeError("t must be instance of datetime or Tuple[datetime, datetime]")
+
+        load_dir = Path(dir_path)
+        if not load_dir.exists():
+            raise FileNotFoundError(f"Directory not found '{load_dir}'")
+
+        paths = glob_function(load_dir)
+        if len(paths) == 0:
+            raise FileNotFoundError(f"No file to read in '{load_dir}'")
+
+        idx = g([ i for i, p in enumerate(paths) if f(p) ])
+
+        paths = [ paths[i] for i in idx ]
+        if len(paths) == 0:
+            raise FileNotFoundError(f"No files remained after applying time filter")
+
+        df = standardize(load_function(paths))
+
+        if isinstance(t, datetime):
+            df = df[df.index <= t].copy()
+        elif is_instance_list(t, datetime, 2):
+            df = df[(df.index >= t[0]) & (df.index <= t[1])].copy()
+
+        return df
+
+    def save(self, dir_path, save_function=None):
+        if save_function is None:
+            save_function = default_save_function
+ 
+        key = self.crange_interval
+
+        return save_function(
+                    df=self.df,
+                    dir_path=dir_path,
+                    sections=self.api.default_save_iterator[key],
+                    format_string=self.api.default_save_fstring[key],
+                    timestamp_filter=self.api.default_timestamp_filter[key]
+                    )
+
+    def down_sampling(self):
+        pass
+    
+    def normalize(self):
+        pass
+    
+    def select(self):
+        pass
 
 class LogChart:
     def __init__(self, dfs):
@@ -77,164 +287,170 @@ class LogChart:
 
 class Chart:
     def __init__(self,
-                 ticker: str,
                  api: Type[ChartAPI],
-                 data_dir: Optional[Union[str, Path]]=None,
+                 ticker: str,
+                 data_dir: Union[str, Path],
+                 crange_interval: Union[str, Iterable[str]]=None
                 ):
-        self.ticker = ticker
         self.api = api
-        self.dirmap = DirMap(root_dir=Path(data_dir) / ticker)
-        self.dfs = {}
+        self.ticker=ticker
+        self.data_dir = Path(data_dir)
         
-        self.flush()
-    
-    def flush(self):
-        for key in self.api.default_crange_intervals.keys():
-            self.dirmap.add_branch(key)
-            self.dfs[key] = self.api.empty
-    
-    def __getitem__(self, key):
-        return self.dfs[key]
-    
+        self.board = {}
+
+        self._init_board(crange_interval)
+
     @property
-    def log10(self):
-        return LogChart(self.dfs)
-    
-    def _download(self, key: str, t: Optional[datetime]=None):
-        crange, interval = self.api.default_crange_intervals[key]
-        df = self.api.download(ticker=self.ticker,
-                               crange=crange,
-                               interval=interval,
-                               t=t)
-        return standardize(df)
-    
-    def _download_all(self, t: Optional[datetime]=None):
-        ret = {}
-        for key in self.api.default_crange_intervals.keys():
-            ret[key] = self.download(key, t=t)
-        return ret
-    
-    def download(self, key: str=None, t: Optional[datetime]=None):
-        if key is None:
-            return self._download_all(t=t)
-        return self._download(key, t=t)
-    
-    def _update(self, key: str, df: pd.DataFrame=None, t=None, merge_function=merge):
-        if df is None:
-            df = self.download(key=key, t=t)
-        self.dfs[key] = merge_function(self.dfs[key], df)
-        return self.dfs[key]
-    
-    def _update_all(self, dfs=None, t=None, merge_function=merge):
-        ret = {}
-        for key in self.api.default_crange_intervals.keys():
-            df = dfs[key] if dfs is not None else None
-            ret[key] = self._update(key, df, t=t, merge_function=merge_function)
-        return ret
-    
-    def update(self, key: str=None, df=None, t=None, merge_function=merge):
-        if key is None:
-            return self._update_all(dfs=df, t=t, merge_function=merge_function)
-        return self._update(key=key, df=df, t=t, merge_function=merge_function)
-    
-    def normalize(self, key: Optional[str]=None):
-        if key is None:
-            for key in self.dfs.keys():
-                self.normalize(key)
-            
-            return self.dfs
+    def dfs(self):
+        return { k: v.df for k, v in self.board.items() }
         
-        df = self.dfs[key]
+    def add(self, crange_interval, api=None):
+        api = api if api is not None else self.api
+        
+        self.board[crange_interval] = \
+                            Board(
+                                ticker=self.ticker,
+                                crange_interval=crange_interval,
+                                api=api
+                            )
+        
+        return self
+    
+    def _to_crange_interval_list(self, crange_interval: str=None):
+        if crange_interval is None:
+            keys = self.board.keys()
+        elif isinstance(crange_interval, str):
+            keys = [crange_interval]
+        elif is_instance_list(crange_interval, str):
+            keys = crange_interval
+        else:
+            raise TypeError("crange_interval must be instance of str or Iterable[str]")
 
-        save_idx = pd.Series(df.index).apply(
-                        self.api.default_timestamp_filter[key]
-                   )
+        return keys
 
-        self.dfs[key] = df.loc[save_idx.values].dropna()
-        return self.dfs[key]
-    
-    def _save(self, key: str, merge_function=default_merge_function):
-        save_dir = self.dirmap[key]
-        save_dir.ensure()
-        
-        fstring = self.api.default_save_fstring[key]
-        sections = self.api.default_save_iterator[key]
-        
-        df = self.dfs[key]
-        
-        for begin, end in sections(df.index[0], df.index[-1]):
-            save_name = begin.strftime(fstring)
-            path = save_dir.path / save_name
-            
-            df_prev = read_csv(path) if path.exists() else None
-            df_part = df[(df.index >= begin) & (df.index < end)]
-            
-            if df_prev is not None:
-                df_part = merge_function(df_prev, df_part)
-            
-            save_idx = pd.Series(df_part.index).apply(
-                            self.api.default_timestamp_filter[key]
-                       )
-            
-            df_part = df_part.loc[save_idx.values]
-            
-            df_part.to_csv(path, index=True)
-        
-        return save_dir
-        
-    def _save_all(self):
-        ret = {}
-        for key in self.dfs.keys():
-            ret[key] = self._save(key)
-            
-        return ret
-    
-    def save(self, key: str=None):
-        if key is None:
-            return self._save_all()
-        return self._save(key)
-    
-    def _load(self, key: str, load_function=default_load_function):
-        if not self.dirmap[key].exists():
-            raise FileNotFoundError(f"Directory not found '{self.dirmap[key]}'")
-            
-        self.dfs[key] = standardize(load_function(self, key))
-        return self.dfs[key]
-    
-    def _load_all(self):
-        for key in self.api.default_crange_intervals.keys():
-            if self.dirmap[key].exists():
-                self.dfs[key] = self._load(key)
-        return self.dfs
-    
-    def load(self, key: str=None):
-        if key is None:
-            return self._load_all()
-        return self._load(key)
-    
-    def down_sampling(self, key: str, sampling_interval: str, update=False):
-        df = down_sampling(self.dfs[key], sampling_interval)
-        if update:
-            self.dfs[key] = df
-        return df
-    
-    def select(self, key: str,
-           year: Optional[int]=None,
-           month: Optional[int]=None,
-           day: Optional[int]=None,
-           hour: Optional[int]=None,
-           minute: Optional[int]=None,
-           second: Optional[int]=None,
-           update: bool=False
-          ):
-        
-        df = select(self.dfs[key], year, month, day, hour, minute, second)
-        if update:
-            self.dfs[key] = df
-        
-        return df
+    def _init_board(self, crange_interval=None, api=None):
+        api = api if api is not None else self.api
+
+        if crange_interval is None:
+            crange_interval = list(api.default_crange_interval.keys())
+
+        for key in self._to_crange_interval_list(crange_interval):
+            self.add(key, api)
     
     def create_emulator(self, root_dir):
-        new_api = ChartEmulatorAPI(self.api, self.dfs, root_dir)
-        return Chart(self.ticker, new_api, root_dir)
+        return None
     
+    def download(self, crange_interval: Union[str, Iterable[str]]=None):
+        ret = {}
+        for key in self._to_crange_interval_list(crange_interval):
+            chart = self.board[key]
+            dir_path = self.data_dir / chart.ticker / chart.crange_interval
+            ret[key] = chart.download(dir_path)
+        
+        return ret
+    
+    def update(self, crange_interval: Union[str, Iterable[str]]):
+        for key in self._to_crange_interval_list(crange_interval):
+            chart = self.board[key]
+            dir_path = self.data_dir / chart.ticker / chart.crange_interval
+            chart.update(dir_path)
+        
+        return self
+    
+    def load(self, crange_interval: Union[str, Iterable[str]]=None, t: datetime=None):
+        for key in self._to_crange_interval_list(crange_interval):
+            chart = self.board[key]
+            dir_path = self.data_dir / chart.ticker / chart.crange_interval
+            chart.sync(dir_path, t, update=False)
+        
+        return self
+    
+    def sync(self, crange_interval: Union[str, Iterable[str]]=None):
+        for key in self._to_crange_interval_list(crange_interval):
+            chart = self.board[key]
+            dir_path = self.data_dir / chart.ticker / chart.crange_interval
+            dirmap.ensure(dir_path)
+            chart.sync(dir_path)
+        
+        return self
+
+
+from .api import ChartAPI, TradeAPI
+
+class ChartEmulatorAPI(ChartAPI):
+    @staticmethod
+    def make_ticker(from_code, to_code):
+        return f"{from_code}-{to_code}"
+
+    def __init__(self,
+                 api: Type[ChartAPI],
+                 dfs: Mapping[str, pd.DataFrame]=None,
+                 root_dir: Path=None,
+                ):
+        self.api = api
+
+        self.dfs = {} if dfs is None else deepcopy(dfs)
+        
+        # TODO: dirmap つくる
+        self.root_dir = root_dir
+        
+        # TODO: 擬似データを保存して dfs をクリアする
+        pass
+     
+    @property
+    def tickers(self):
+        return self.api.tickers
+    
+    @property
+    def cranges(self):
+        return self.api.cranges
+    
+    @property
+    def intervals(self):
+        return self.api.intervals
+    
+    @property
+    def max_cranges(self):
+        return self.api.max_cranges
+    
+    @property
+    def default_crange_intervals(self):
+        return self.api.default_crange_intervals
+    
+    @property
+    def default_timestamp_filter(self):
+        return self.api.default_timestamp_filter
+    
+    @property
+    def default_save_fstring(self):
+        return self.api.default_save_fstring
+    
+    @property
+    def default_save_iterator(self):
+        return self.api.default_save_iterator
+    
+    @property
+    def empty(self):
+        return self.api.empty
+
+    def download(self, ticker, crange, interval, t=None, as_dataframe=True):
+        if ticker not in self.tickers:
+            raise ValueError(f"ticker '{ticker}' not in {self.tickers}")
+        if crange not in self.cranges:
+            raise ValueError(f"crange '{crange}' not in {self.cranges}")
+        if interval not in self.intervals:
+            raise ValueError(f"interval '{interval}' not in {self.intervals}")
+        
+        crange_interval = '-'.join([crange, interval])
+        
+        if crange_interval not in self.dfs:
+            raise ValueError(f"'{crange_interval}' not in dfs")
+
+        # 過去のデータをロードするようにつくりなおす
+            
+        df = self.dfs[crange_interval]
+        
+        if t is not None:
+            df = df[df.index <= t]
+            
+        return df
