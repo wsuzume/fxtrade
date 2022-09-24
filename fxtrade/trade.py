@@ -4,25 +4,14 @@ import numpy as np
 import pandas as pd
 
 from fractions import Fraction
+from pathlib import Path
 from typing import Optional, Union, Iterable, List
 
+from .core import is_instance_list
 from .const import Const
 from .stock import as_numeric, Numeric, Stock, Rate
 
 TRADE = Const({'BUY', 'SELL', 'DEPOSIT', 'WITHDRAW'})
-TRADE.TRADE_COLUMNS = pd.Index([
-    't', 'order_id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)'
-])
-TRADE.TRADE_PAIR_COLUMNS = pd.Index([
-    'before_id', 'after_id', 's', 't',
-    'X(s)', 'Y(s+ds)=Y(t)', 'Z(t+dt)', 'code_X', 'code_Y', 'code_Z',
-    'R(ys/xs)', 'R(zt/yt)', 'R(zt/xs)',
-])
-TRADE.TRADE_SUMMARY_COLUMNS = pd.Index([
-    'capital', 'via', 'used', 'earned', 'position', 'hold', 'rate_mean',
-    'position_min', 'hold_min', 'rate_min', 'position_max', 'hold_max', 'rate_max',
-])
-
 
 class Transfer:
     """Transfer of funds outside of transactions.
@@ -44,6 +33,28 @@ class Trade:
     """Represent a single transaction.
     Consists from the stock before transaction and the stock after transaction.
     """
+    @classmethod
+    @property
+    def columns(cls):
+        return pd.Index([
+            't', 'order_id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)'
+        ])
+
+    @classmethod
+    @property
+    def datetime_columns(cls):
+        return pd.Index(['t'])
+
+    @classmethod
+    @property
+    def numeric_columns(cls):
+        return pd.Index(['X(t)', 'Y(t+dt)', 'R(yt/xt)'])
+    
+    @classmethod
+    @property
+    def string_columns(cls):
+        return pd.Index(['order_id', 'from', 'to'])
+
     @staticmethod
     def from_series(s: pd.Series):
         """Create Trade from pandas.Series. Columns must be
@@ -131,7 +142,7 @@ class Trade:
         return pd.Series([self.t, self.order_id,
                           self.x.code, self.x.q,
                           self.y.code, self.y.q,
-                          self.rate.r], index=TRADE.TRADE_COLUMNS)
+                          self.rate.r], index=Trade.columns)
     
     def split_x(self, x: Stock):
         """
@@ -265,6 +276,15 @@ class Trade:
 class TradePair:
     """Pair of transactions with confirmed profit or loss.
     """
+    @classmethod
+    @property
+    def columns(cls):
+        return pd.Index([
+            'before_id', 'after_id', 's', 't',
+            'X(s)', 'Y(s+ds)=Y(t)', 'Z(t+dt)', 'code_X', 'code_Y', 'code_Z',
+            'R(ys/xs)', 'R(zt/yt)', 'R(zt/xs)',
+        ])
+
     @staticmethod
     def from_series(s):
         """Create TradePair from pandas.Series. Columns must be
@@ -324,18 +344,55 @@ class TradePair:
                             self.before.rate.r,
                             self.after.rate.r,
                             (self.before.rate * self.after.rate).r,
-                         ], index=TRADE.TRADE_PAIR_COLUMNS)
+                         ], index=TradePair.columns)
         
 class History:
     """
     Keep all transactions in a dataframe.
     """
-    @staticmethod
-    def from_dataframe(df, copy: bool=True):
-        ret = History()
-        ret._df = df if not copy else df.copy()
-        return ret
+    @classmethod
+    @property
+    def columns(cls):
+        return Trade.columns
     
+    @classmethod
+    @property
+    def datetime_columns(cls):
+        return Trade.datetime_columns
+
+    @classmethod
+    @property
+    def numeric_columns(cls):
+        return Trade.numeric_columns
+    
+    @classmethod
+    @property
+    def string_columns(cls):
+        return Trade.string_columns
+
+    @classmethod
+    def typecast(cls, df):
+        df = df[cls.columns].copy()
+
+        for col in cls.datetime_columns:
+            df[col] = df[col].apply(pd.Timestamp)
+        for col in cls.numeric_columns:
+            df[col] = df[col].apply(Fraction)
+        for col in cls.string_columns:
+            df[col] = df[col].apply(str)
+        
+        return df
+    
+    @classmethod
+    def read_csv(cls, path):
+        path = Path(path)
+        df = pd.read_csv(path, index_col=0, parse_dates=True)
+        return cls.typecast(df)
+    
+    @classmethod
+    def from_csv(cls, path):
+        return History(cls.read_csv(path))
+
     def __init__(self, trade: Optional[Union[Trade, Iterable[Trade]]]=None):
         """
         Parameters
@@ -343,10 +400,13 @@ class History:
         trade : Union[Trade, Iterable[Trade]], optional
             A trade or a list of trades.
         """
-        self._df = pd.DataFrame([], columns=TRADE.TRADE_COLUMNS)
+        self._df = pd.DataFrame([], columns=Trade.columns)
         
         if trade is not None:
             self.add(trade)
+    
+    def __repr__(self):
+        return f"History()"
     
     @property
     def df(self) -> pd.DataFrame:
@@ -357,34 +417,44 @@ class History:
     def copy(self) -> History:
         """Return the copy of history.
         """
-        return History.from_dataframe(self._df)
+        return History(self._df)
+
+    def to_csv(self, path, append=True):
+        df = self._df
+
+        path = Path(path)
+        if path.exists():
+            df_old = self.read_csv(path)
+            df = pd.concat([df_old, df], axis=0).sort_index()
+        
+        return df.to_csv(path, index=True)
 
     def __getitem__(self, idx):
         return Trade.from_series(self._df.loc[idx])
     
-    def add(self, trade: Optional[Union[Trade, Iterable[Trade], History]], copy: bool=False) -> History:
+    def add(self, trade: Optional[Union[Trade, Iterable[Trade], History]]) -> History:
         """
         Add a trade or a list of trades to the history.
         """
-        hist = self if not copy else self.copy()
-
         if trade is None:
-            return hist
-        
-        df = None
-        if isinstance(trade, History):
+            return self
+        elif isinstance(trade, History):
             df = trade._df
-        if isinstance(trade, Trade):
+        elif isinstance(trade, pd.DataFrame):
+            df = trade
+        elif isinstance(trade, pd.Series):
+            df = pd.DataFrame([ trade ])
+        elif isinstance(trade, Trade):
             df = pd.DataFrame([ trade.as_series() ])
-        elif isinstance(trade, Iterable):
+        elif is_instance_list(trade, Trade):
             df = pd.DataFrame([ t.as_series() for t in trade ])
-        
-        if df is None:
+        else:
             raise TypeError("trade must be type of Trade or Iterable[Trade]")
             
-        hist._df = pd.concat([hist._df, df]).reset_index(drop=True)
-        
-        return hist
+        df = pd.concat([self._df, df]).reset_index(drop=True)
+        self._df = self.typecast(df)
+
+        return self
     
     def drop(self, idx):
         """
@@ -499,7 +569,7 @@ class History:
                           maxs['X(t)'].sum(),
                           maxs['Y(t+dt)'].sum(),
                           vmax,
-                         ], index=TRADE.TRADE_SUMMARY_COLUMNS)
+                         ], index=TradeSummary.columns)
     
     def summarize(self, origin: Optional[str]=None):
         hist, report = self.close()
@@ -514,7 +584,7 @@ class History:
                 code_Y = rep.iloc[0]['code_Y']
 
                 pos_idx = (hist._df['from'] == code_X) & (hist._df['to'] == code_Y)
-                pos = History.from_dataframe(hist._df[pos_idx], copy=False)
+                pos = History(hist._df[pos_idx], copy=False)
                 
                 desc = pos.describe(code_X, code_Y)
                 desc['used'] = rep['X(s)'].sum()
@@ -522,7 +592,7 @@ class History:
 
                 ret.append(desc)
         
-        df = pd.DataFrame(ret, columns=TRADE.TRADE_SUMMARY_COLUMNS)
+        df = pd.DataFrame(ret, columns=TradeSummary.columns)
         
         if len(hist._df) != 0:
             ret = []
@@ -556,7 +626,17 @@ class History:
             df = pd.concat([primary_df, secondary_df, other_df], axis=0)
             
         return df.reset_index(drop=True)
-    
+
+class TradeSummary:
+    @classmethod
+    @property
+    def columns(cls):
+        return pd.Index([
+            'capital', 'via', 'used', 'earned', 'position', 'hold', 'rate_mean',
+            'position_min', 'hold_min', 'rate_min', 'position_max', 'hold_max', 'rate_max',
+        ])
+
+
 class Report:
     @staticmethod
     def from_dataframe(df):
@@ -565,7 +645,7 @@ class Report:
         return ret
     
     def __init__(self, trade_pair: Optional[Union[TradePair, Iterable[TradePair]]]=None):
-        self._df = pd.DataFrame([], columns=TRADE.TRADE_PAIR_COLUMNS)
+        self._df = pd.DataFrame([], columns=TradePair.columns)
         
         if trade_pair is not None:
             self.add(trade_pair)

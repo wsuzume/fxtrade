@@ -227,7 +227,10 @@ class Board:
             f = lambda x: datetime.strptime(x.name, fmt) <= t
             g = lambda idx: idx
         elif is_instance_list(t, datetime, 2):
-            f = lambda x: t[0] <= datetime.strptime(x.name, fmt) <= t[1]
+            if t[1] is not None:
+                f = lambda x: t[0] <= datetime.strptime(x.name, fmt)
+            else:
+                f = lambda x: t[0] <= datetime.strptime(x.name, fmt) <= t[1]
             g = lambda idx: list(filter(lambda x: x >= 0, [idx[0] - 1] + list(idx)))
         else:
             raise TypeError("t must be instance of datetime or Tuple[datetime, datetime]")
@@ -251,7 +254,10 @@ class Board:
         if isinstance(t, datetime):
             df = df[df.index <= t].copy()
         elif is_instance_list(t, datetime, 2):
-            df = df[(df.index >= t[0]) & (df.index <= t[1])].copy()
+            if t[1] is None:
+                df = df[df.index >= t[0]].copy()
+            else:
+                df = df[(df.index >= t[0]) & (df.index <= t[1])].copy()
 
         return df
 
@@ -295,10 +301,15 @@ class Chart:
         self.api = api
         self.ticker=ticker
         self.data_dir = Path(data_dir)
+        self.crange_interval = crange_interval
         
         self.board = {}
 
         self._init_board(crange_interval)
+
+    def create_emulator(self, emulator_dir: Union[str, Path], data_dir: Union[str, Path]):
+        api = ChartEmulatorAPI(self, emulator_dir)
+        return Chart(api=api, ticker=self.ticker, data_dir=data_dir, crange_interval=self.crange_interval)
 
     @property
     def dfs(self):
@@ -337,65 +348,68 @@ class Chart:
         for key in self._to_crange_interval_list(crange_interval):
             self.add(key, api)
     
-    def create_emulator(self, root_dir):
-        return None
-    
+    def flush(self, crange_interval: Union[str, Iterable[str]]=None):
+        for key in self._to_crange_interval_list(crange_interval):
+            board = self.board[key]
+            board.flush()
+
+        return self
+
     def download(self, crange_interval: Union[str, Iterable[str]]=None):
         ret = {}
         for key in self._to_crange_interval_list(crange_interval):
-            chart = self.board[key]
-            dir_path = self.data_dir / chart.ticker / chart.crange_interval
-            ret[key] = chart.download(dir_path)
+            board = self.board[key]
+            dir_path = self.data_dir / board.ticker / board.crange_interval
+            ret[key] = board.download(dir_path)
         
         return ret
     
     def update(self, crange_interval: Union[str, Iterable[str]]):
         for key in self._to_crange_interval_list(crange_interval):
-            chart = self.board[key]
-            dir_path = self.data_dir / chart.ticker / chart.crange_interval
-            chart.update(dir_path)
+            board = self.board[key]
+            dir_path = self.data_dir / board.ticker / board.crange_interval
+            board.update(dir_path)
         
         return self
     
     def load(self, crange_interval: Union[str, Iterable[str]]=None, t: datetime=None):
+        ret = {}
         for key in self._to_crange_interval_list(crange_interval):
-            chart = self.board[key]
-            dir_path = self.data_dir / chart.ticker / chart.crange_interval
-            chart.sync(dir_path, t, update=False)
+            board = self.board[key]
+            dir_path = self.data_dir / board.ticker / board.crange_interval
+            ret[key] = board.load(dir_path, t)
+        
+        return self
+
+    def save(self, crange_interval: Union[str, Iterable[str]]=None):
+        for key in self._to_crange_interval_list(crange_interval):
+            board = self.board[key]
+            dir_path = self.data_dir / board.ticker / board.crange_interval
+            board.save(dir_path)
         
         return self
     
-    def sync(self, crange_interval: Union[str, Iterable[str]]=None):
+    def sync(self, crange_interval: Union[str, Iterable[str]]=None, t=None, update: bool=True, save: bool=True):
         for key in self._to_crange_interval_list(crange_interval):
-            chart = self.board[key]
-            dir_path = self.data_dir / chart.ticker / chart.crange_interval
+            board = self.board[key]
+            dir_path = self.data_dir / board.ticker / board.crange_interval
             dirmap.ensure(dir_path)
-            chart.sync(dir_path)
+            board.sync(dir_path, t=t, update=update)
         
         return self
 
-
-from .api import ChartAPI, TradeAPI
-
 class ChartEmulatorAPI(ChartAPI):
-    @staticmethod
-    def make_ticker(from_code, to_code):
-        return f"{from_code}-{to_code}"
-
     def __init__(self,
-                 api: Type[ChartAPI],
-                 dfs: Mapping[str, pd.DataFrame]=None,
+                 chart: Chart,
                  root_dir: Path=None,
                 ):
-        self.api = api
+        self.api = chart.api
+        self.board = { k: v.copy() for k, v in chart.board.items() }
+        self.root_dir = Path(root_dir)
 
-        self.dfs = {} if dfs is None else deepcopy(dfs)
-        
-        # TODO: dirmap つくる
-        self.root_dir = root_dir
-        
-        # TODO: 擬似データを保存して dfs をクリアする
-        pass
+        for board in chart.board.values():
+            dir_path = self.root_dir / board.ticker / board.crange_interval
+            board.sync(dir_path, update=False)
      
     @property
     def tickers(self):
@@ -434,6 +448,9 @@ class ChartEmulatorAPI(ChartAPI):
         return self.api.empty
 
     def download(self, ticker, crange, interval, t=None, as_dataframe=True):
+        if not as_dataframe:
+            raise ValueError(f"as_dataframe must be True")
+
         if ticker not in self.tickers:
             raise ValueError(f"ticker '{ticker}' not in {self.tickers}")
         if crange not in self.cranges:
@@ -441,16 +458,25 @@ class ChartEmulatorAPI(ChartAPI):
         if interval not in self.intervals:
             raise ValueError(f"interval '{interval}' not in {self.intervals}")
         
-        crange_interval = '-'.join([crange, interval])
+        crange_interval = ChartEmulatorAPI.make_crange_interval(crange, interval)
         
-        if crange_interval not in self.dfs:
+        if crange_interval not in self.board:
             raise ValueError(f"'{crange_interval}' not in dfs")
 
         # 過去のデータをロードするようにつくりなおす
-            
-        df = self.dfs[crange_interval]
         
-        if t is not None:
+        df = self.board[crange_interval].df
+        
+        if t is None:
+            pass
+        elif isinstance(t, datetime):
             df = df[df.index <= t]
+        elif is_instance_list(t, datetime, 2):
+            if t[1] is None:
+                df = df[df.index >= t[0]]
+            else:
+                df = df[(df.index >= t[0]) & (df.index <= t[1])]
+        else:
+            TypeError(f"")
             
         return df
