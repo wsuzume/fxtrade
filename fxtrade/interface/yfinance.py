@@ -53,6 +53,10 @@ class YahooFinanceAPI(ChartAPI):
     @staticmethod
     def make_ticker(from_code, to_code):
         return f"{from_code.upper()}-{to_code.upper()}"
+    
+    @staticmethod
+    def make_currency_pair(pair):
+        return f"{pair.terminal}-{pair.initial}"
         
     def __init__(self, api_key):
         self.api_key = api_key
@@ -77,6 +81,10 @@ class YahooFinanceAPI(ChartAPI):
             '1m': '5d',
         }
     
+    @property
+    def default_crange_interval(self):
+        return '1mo-15m'
+
     @property
     def default_crange_intervals(self):
         return {

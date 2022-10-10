@@ -273,6 +273,10 @@ class Trade:
         """
         return Trade(self.x / other, self.y / other, self.t, self.order_id).ceil()
 
+class FailedTrade:
+    def __init__(self, message):
+        self.message = message
+
 class TradePair:
     """Pair of transactions with confirmed profit or loss.
     """
@@ -406,7 +410,7 @@ class History:
             self.add(trade)
     
     def __repr__(self):
-        return f"History()"
+        return f"History(N={len(self._df)})"
     
     @property
     def df(self) -> pd.DataFrame:

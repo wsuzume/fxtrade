@@ -15,6 +15,7 @@ from .analysis import log10
 from .api import ChartAPI
 from .core import is_instance_list
 from .dirmap import DirMap
+from .stock import CurrencyPair
 from .timeseries import merge, down_sampling, select, \
                         normalized_timeindex, get_first_timestamp, \
                         to_timedelta
@@ -133,10 +134,12 @@ class Board:
     def __repr__(self):
         return f"Board('{self.ticker}', '{self.crange_interval}')"
 
-    def copy(self):
+    def copy(self, api=None):
+        if api is None:
+            api = self.api
         return Board(ticker=self.ticker,
                      crange_interval=self.crange_interval,
-                     api=self.api,
+                     api=api,
                      df=self.df.copy(),
                      refresh_limit=self.refresh_limit)
 
@@ -275,14 +278,14 @@ class Board:
                     timestamp_filter=self.api.default_timestamp_filter[key]
                     )
 
-    def down_sampling(self):
-        pass
+    # def down_sampling(self):
+    #     pass
     
-    def normalize(self):
-        pass
+    # def normalize(self):
+    #     pass
     
-    def select(self):
-        pass
+    # def select(self):
+    #     pass
 
 class LogChart:
     def __init__(self, dfs):
@@ -294,22 +297,39 @@ class LogChart:
 class Chart:
     def __init__(self,
                  api: Type[ChartAPI],
-                 ticker: str,
+                 currency_pair: CurrencyPair,
                  data_dir: Union[str, Path],
                  crange_interval: Union[str, Iterable[str]]=None
                 ):
         self.api = api
-        self.ticker=ticker
+        self.currency_pair = currency_pair.copy()
         self.data_dir = Path(data_dir)
-        self.crange_interval = crange_interval
+        self.crange_interval = crange_interval.copy()
         
         self.board = {}
 
         self._init_board(crange_interval)
+    
+    def copy(self, api=None, data_dir=None):
+        if api is None:
+            api = self.api
+        if data_dir is None:
+            data_dir = self.data_dir
+        
+        chart = Chart(api, self.currency_pair, data_dir, self.crange_interval)
+        for key, board in self.board.items():
+            chart.board[key] = board.copy()
+        
+        return chart
+
 
     def create_emulator(self, emulator_dir: Union[str, Path], data_dir: Union[str, Path]):
         api = ChartEmulatorAPI(self, emulator_dir)
-        return Chart(api=api, ticker=self.ticker, data_dir=data_dir, crange_interval=self.crange_interval)
+        chart = self.copy(api=api, data_dir=data_dir)
+        chart = Chart(api=api, currency_pair=self.currency_pair, data_dir=data_dir, crange_interval=self.crange_interval)
+        for key, board in self.board.items():
+            chart.board[key] = board.copy(api=api)
+        return chart
 
     @property
     def dfs(self):
@@ -320,7 +340,7 @@ class Chart:
         
         self.board[crange_interval] = \
                             Board(
-                                ticker=self.ticker,
+                                ticker=self.api.make_currency_pair(self.currency_pair),
                                 crange_interval=crange_interval,
                                 api=api
                             )
@@ -355,50 +375,59 @@ class Chart:
 
         return self
 
-    def download(self, crange_interval: Union[str, Iterable[str]]=None):
+    def download(self, crange_interval: Union[str, Iterable[str]]=None, t=None, data_dir=None):
+        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
         ret = {}
         for key in self._to_crange_interval_list(crange_interval):
             board = self.board[key]
-            dir_path = self.data_dir / board.ticker / board.crange_interval
-            ret[key] = board.download(dir_path)
+            dir_path = data_dir / board.ticker / board.crange_interval
+            ret[key] = board.download(t)
         
         return ret
     
-    def update(self, crange_interval: Union[str, Iterable[str]]):
+    def update(self, crange_interval: Union[str, Iterable[str]], data_dir=None):
+        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
         for key in self._to_crange_interval_list(crange_interval):
             board = self.board[key]
-            dir_path = self.data_dir / board.ticker / board.crange_interval
+            dir_path = data_dir / board.ticker / board.crange_interval
             board.update(dir_path)
         
         return self
     
-    def load(self, crange_interval: Union[str, Iterable[str]]=None, t: datetime=None):
+    def load(self, crange_interval: Union[str, Iterable[str]]=None, t: datetime=None, data_dir=None):
+        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
         ret = {}
         for key in self._to_crange_interval_list(crange_interval):
             board = self.board[key]
-            dir_path = self.data_dir / board.ticker / board.crange_interval
+            dir_path = data_dir / board.ticker / board.crange_interval
             ret[key] = board.load(dir_path, t)
         
         return self
 
-    def save(self, crange_interval: Union[str, Iterable[str]]=None):
+    def save(self, crange_interval: Union[str, Iterable[str]]=None, data_dir=None):
+        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
         for key in self._to_crange_interval_list(crange_interval):
             board = self.board[key]
-            dir_path = self.data_dir / board.ticker / board.crange_interval
+            dir_path = data_dir / board.ticker / board.crange_interval
             board.save(dir_path)
         
         return self
     
-    def sync(self, crange_interval: Union[str, Iterable[str]]=None, t=None, update: bool=True, save: bool=True):
+    def sync(self, crange_interval: Union[str, Iterable[str]]=None, t=None, data_dir=None, update: bool=True, save: bool=True):
+        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
         for key in self._to_crange_interval_list(crange_interval):
             board = self.board[key]
-            dir_path = self.data_dir / board.ticker / board.crange_interval
+            dir_path = data_dir / board.ticker / board.crange_interval
             dirmap.ensure(dir_path)
             board.sync(dir_path, t=t, update=update)
         
         return self
 
 class ChartEmulatorAPI(ChartAPI):
+    @staticmethod
+    def make_currency_pair(pair):
+        return f"{pair.terminal}-{pair.initial}"
+        
     def __init__(self,
                  chart: Chart,
                  root_dir: Path=None,
@@ -479,4 +508,4 @@ class ChartEmulatorAPI(ChartAPI):
         else:
             TypeError(f"")
             
-        return df
+        return df.copy()

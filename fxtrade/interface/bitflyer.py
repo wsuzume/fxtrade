@@ -179,10 +179,18 @@ def cashflow_to_history(df):
     sell_his.columns = ['t', 'order_id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)']
     
     ret = pd.concat([buy_his, sell_his], axis=0).sort_values('t', ascending=False).reset_index(drop=True)
-    
-    return History.from_dataframe(ret)
+
+    return History(ret)
 
 class BitflyerAPI(TradeAPI):
+    @staticmethod
+    def make_ticker(from_code, to_code):
+        return f"{from_code}_{to_code}"
+    
+    @staticmethod
+    def make_currency_pair(pair):
+        return f"{pair.terminal}_{pair.initial}"
+
     def __init__(self, api_key, api_secret):
         self.api_key = api_key
         self.api_secret = api_secret
@@ -214,7 +222,7 @@ class BitflyerAPI(TradeAPI):
         
         return Fraction(str(resp['commission_rate']))
     
-    def get_ticker(self, code):
+    def get_ticker(self, code, t=None):
         if code is None:
             code = 'btc_jpy'
         

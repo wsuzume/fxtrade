@@ -5,6 +5,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Iterable
 
+from .core import is_instance_list
 from .stock import Stock
 
 class Wallet:
@@ -29,14 +30,24 @@ class Wallet:
     def __init__(self, xs=None):
         self.stocks = {}
 
-        if xs is not None:
-            self.join(xs)
+        self.join(xs)
     
     def __repr__(self):
         return f"Wallet({self.stocks})"
     
     def __getitem__(self, key):
-        return self.stocks[key]
+        if isinstance(key, str):
+            return self.stocks[key]
+        elif is_instance_list(key, str):
+            w = Wallet()
+            for k in key:
+                if k not in self.stocks:
+                    w.stocks[k] = Stock(k, 0)
+                else:
+                    w.stocks[k] = self.stocks[k].copy()
+            return w
+        else:
+            raise TypeError("")
     
     def __setitem__(self, key, val):
         # all codes must be upper case
@@ -47,9 +58,7 @@ class Wallet:
             self.stocks[key] = Stock(key, val)
 
     def copy(self):
-        w = Wallet()
-        w.stocks = copy.deepcopy(self.stocks)
-        return w
+        return Wallet(self)
 
     @property
     def codes(self):
@@ -59,8 +68,13 @@ class Wallet:
         if codes is None:
             return self
         elif isinstance(codes, str):
+            if codes not in self.stocks:
+                raise ValueError(f"'{codes}' not in Wallet({self.stocks})")
             self.stocks = { codes: self.stocks[codes] }
-        else:
+        elif is_instance_list(codes, str):
+            for code in codes:
+                if code not in self.stocks:
+                    raise ValueError(f"'{code}' not in Wallet({self.stocks})")
             self.stocks = { k: v for k, v in self.stocks.items() if k in codes }
         
         return self
@@ -90,34 +104,60 @@ class Wallet:
         
         return df.to_csv(path, index=True)
 
-    def join(self, code: str):
-        if isinstance(code, str):
-            self[code] = Stock(code, 0)
-        elif isinstance(code, pd.Series):
-            for c, q in code.iteritems():
+    def join(self, x: str):
+        if x is None:
+            return self
+        elif isinstance(x, str):
+            self[x] = Stock(x, 0)
+        elif isinstance(x, Stock):
+            self[x.code] = x.copy()
+        elif isinstance(x, Wallet):
+            for stock in x.stocks.values():
+                self[stock.code] = stock.copy()
+        elif isinstance(x, pd.Series):
+            for c, q in x.iteritems():
                 self[c] = Stock(c, q)
-        elif isinstance(code, Iterable):
-            for c in code:
+        elif is_instance_list(x, str):
+            for c in x:
                 self[c] = Stock(c, 0)
+        elif is_instance_list(x, Stock):
+            for stock in x:
+                self[stock.code] = stock.copy()
+        else:
+            raise TypeError("unsupported type")
         
         return self
 
-    def add(self, stock):
-        if stock.code not in self.stocks:
-            self[stock.code] = stock
-        else:
-            self[stock.code] += stock
+    def add(self, x):
+        if isinstance(x, Wallet):
+            for stock in x.stocks.values():
+                self.add(stock)
+        elif isinstance(x, Stock):
+            if x.code not in self.stocks:
+                self[x.code] = x
+            else:
+                self[x.code] += x
         return self
     
-    def sub(self, stock):
-        if stock.code not in self.stocks:
-            self[stock.code] = -stock
-        else:
-            self[stock.code] -= stock
+    def sub(self, x):
+        if isinstance(x, Wallet):
+            for stock in x.stocks.values():
+                self.sub(stock)
+        elif isinstance(x, Stock):
+            if x.code not in self.stocks:
+                self[x.code] = -x
+            else:
+                self[x.code] -= x
         return self
 
-    def __iadd__(self, other):
-        return self.add(other)
+    def __add__(self, x):
+        return self.copy().add(x)
     
-    def __isub__(self, other):
-        return self.sub(other)
+    def __sub__(self, x):
+        return self.copy().sub(x)
+    
+    def __iadd__(self, x):
+        return self.add(x)
+    
+    def __isub__(self, x):
+        return self.sub(x)

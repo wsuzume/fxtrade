@@ -43,6 +43,22 @@ def as_numeric(x: Any):
 
     return x if isinstance(x, Fraction) else Fraction(x)
 
+class CurrencyPair:
+    def __init__(self, initial: str, terminal: str):
+        self._initial = str(initial)
+        self._terminal = str(terminal)
+    
+    @property
+    def initial(self):
+        return self._initial
+    
+    @property
+    def terminal(self):
+        return self._terminal
+
+    def copy(self):
+        return CurrencyPair(self.initial, self.terminal)
+
 class Stock:
     """
     Stock consists from code and quantity.
@@ -59,7 +75,7 @@ class Stock:
         if not isinstance(code, str):
             raise TypeError("code must be type of str")
         
-        self._code = code
+        self._code = str(code)
         self._q = as_numeric(q)
 
     @property
@@ -76,6 +92,9 @@ class Stock:
         """
         return self._q
     
+    def copy(self):
+        return Stock(self.code, self.q)
+
     def floor(self, n: int=6):
         """
         Return floor at the specified digit.
