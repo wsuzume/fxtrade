@@ -43,21 +43,27 @@ def as_numeric(x: Any):
 
     return x if isinstance(x, Fraction) else Fraction(x)
 
-class CurrencyPair:
-    def __init__(self, initial: str, terminal: str):
-        self._initial = str(initial)
-        self._terminal = str(terminal)
+class CodePair:
+    """
+    The base currency is the first currency in a currency pair.
+    The second is the quote or counter currency.
+    The quote for the currency pair shows how much of the quote currency
+    it takes to purchase one unit of the other.
+    """
+    def __init__(self, base: str, quote: str):
+        self._base = str(base)
+        self._quote = str(quote)
     
     @property
-    def initial(self):
-        return self._initial
+    def base(self):
+        return self._base
     
     @property
-    def terminal(self):
-        return self._terminal
+    def quote(self):
+        return self._quote
 
     def copy(self):
-        return CurrencyPair(self.initial, self.terminal)
+        return CodePair(self.base, self.quote)
 
 class Stock:
     """
