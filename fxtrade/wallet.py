@@ -15,36 +15,42 @@ class Wallet:
         return pd.read_csv(path, index_col=0, parse_dates=True).applymap(Fraction)
 
     @classmethod
-    def from_dataframe(cls, df, codes=None):
-        xs = df.sort_index().iloc[-1]
-        return Wallet(xs).filter_stocks(codes)
+    def from_dataframe(cls, df, code=None):
+        stocks = df.sort_index().iloc[-1]
+        return Wallet(stocks).filter_stocks(code)
     
     @classmethod
-    def from_csv(cls, path, codes=None):
+    def from_csv(cls, path, code=None):
         df = cls.read_csv(path)
-        return Wallet.from_dataframe(df, codes)
+        return Wallet.from_dataframe(df, code)
 
     """
     Manage your stocks.
     """
-    def __init__(self, xs=None):
-        self.stocks = {}
+    def __init__(self, stock=None):
+        self._stocks = {}
 
-        self.join(xs)
+        self.join(stock)
     
     def __repr__(self):
-        return f"Wallet({self.stocks})"
+        return f"Wallet({self._stocks})"
+    
+    def __len__(self):
+        return len(self._stocks)
+    
+    def __contains__(self, key):
+        return key in self._stocks
     
     def __getitem__(self, key):
         if isinstance(key, str):
-            return self.stocks[key]
+            return self._stocks[key]
         elif is_instance_list(key, str):
             w = Wallet()
             for k in key:
-                if k not in self.stocks:
-                    w.stocks[k] = Stock(k, 0)
+                if k not in self._stocks:
+                    w._stocks[k] = Stock(k, 0)
                 else:
-                    w.stocks[k] = self.stocks[k].copy()
+                    w._stocks[k] = self._stocks[k].copy()
             return w
         else:
             raise TypeError("")
@@ -53,29 +59,37 @@ class Wallet:
         # all codes must be upper case
         key = key.upper()
         if isinstance(val, Stock):
-            self.stocks[key] = val
+            self._stocks[key] = val
         else:
-            self.stocks[key] = Stock(key, val)
+            self._stocks[key] = Stock(key, val)
 
     def copy(self):
         return Wallet(self)
 
+    def dump(self, f, indent=2, nest=1):
+        tab = " " * indent * nest
+        last_tab = " " * (indent * (nest - 1))
+        f.write(f"Wallet({{\n")
+        for code, q in self._stocks.items():
+            f.write(f"{tab}'{code}': {q},\n")
+        f.write(f"{last_tab}}})")
+
     @property
     def codes(self):
-        return list(self.stocks.keys())
+        return list(self._stocks.keys())
     
-    def filter_stocks(self, codes=None):
-        if codes is None:
+    def filter_stocks(self, code=None):
+        if code is None:
             return self
-        elif isinstance(codes, str):
-            if codes not in self.stocks:
-                raise ValueError(f"'{codes}' not in Wallet({self.stocks})")
-            self.stocks = { codes: self.stocks[codes] }
-        elif is_instance_list(codes, str):
-            for code in codes:
-                if code not in self.stocks:
-                    raise ValueError(f"'{code}' not in Wallet({self.stocks})")
-            self.stocks = { k: v for k, v in self.stocks.items() if k in codes }
+        elif isinstance(code, str):
+            if code not in self._stocks:
+                raise ValueError(f"'{code}' not in Wallet({self._stocks})")
+            self._stocks = { code: self._stocks[code] }
+        elif is_instance_list(code, str):
+            for code in code:
+                if code not in self._stocks:
+                    raise ValueError(f"'{code}' not in Wallet({self._stocks})")
+            self._stocks = { k: v for k, v in self._stocks.items() if k in code }
         
         return self
     
@@ -87,8 +101,8 @@ class Wallet:
         if t is None:
             t = pd.Timestamp.now().round('S')
 
-        cols = [ k for k in self.stocks.keys() ]
-        vals = [ v.q for v in self.stocks.values() ]
+        cols = [ k for k in self._stocks.keys() ]
+        vals = [ v.q for v in self._stocks.values() ]
 
         df = pd.DataFrame([vals], index=[t], columns=cols)
 
@@ -112,10 +126,10 @@ class Wallet:
         elif isinstance(x, Stock):
             self[x.code] = x.copy()
         elif isinstance(x, Wallet):
-            for stock in x.stocks.values():
+            for stock in x._stocks.values():
                 self[stock.code] = stock.copy()
         elif isinstance(x, pd.Series):
-            for c, q in x.iteritems():
+            for c, q in x.items():
                 self[c] = Stock(c, q)
         elif is_instance_list(x, str):
             for c in x:
@@ -124,16 +138,16 @@ class Wallet:
             for stock in x:
                 self[stock.code] = stock.copy()
         else:
-            raise TypeError("unsupported type")
+            raise TypeError(f"unsupported type '{x}'")
         
         return self
 
     def add(self, x):
         if isinstance(x, Wallet):
-            for stock in x.stocks.values():
+            for stock in x._stocks.values():
                 self.add(stock)
         elif isinstance(x, Stock):
-            if x.code not in self.stocks:
+            if x.code not in self._stocks:
                 self[x.code] = x
             else:
                 self[x.code] += x
@@ -141,10 +155,10 @@ class Wallet:
     
     def sub(self, x):
         if isinstance(x, Wallet):
-            for stock in x.stocks.values():
+            for stock in x._stocks.values():
                 self.sub(stock)
         elif isinstance(x, Stock):
-            if x.code not in self.stocks:
+            if x.code not in self._stocks:
                 self[x.code] = -x
             else:
                 self[x.code] -= x

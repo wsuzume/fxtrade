@@ -61,6 +61,9 @@ class CodePair:
     @property
     def quote(self):
         return self._quote
+    
+    def __str__(self):
+        return f"CodePair(base='{self.base}', quote='{self.quote}')"
 
     def copy(self):
         return CodePair(self.base, self.quote)
