@@ -43,31 +43,6 @@ def as_numeric(x: Any):
 
     return x if isinstance(x, Fraction) else Fraction(x)
 
-class CodePair:
-    """
-    The base currency is the first currency in a currency pair.
-    The second is the quote or counter currency.
-    The quote for the currency pair shows how much of the quote currency
-    it takes to purchase one unit of the other.
-    """
-    def __init__(self, base: str, quote: str):
-        self._base = str(base)
-        self._quote = str(quote)
-    
-    @property
-    def base(self):
-        return self._base
-    
-    @property
-    def quote(self):
-        return self._quote
-    
-    def __str__(self):
-        return f"CodePair(base='{self.base}', quote='{self.quote}')"
-
-    def copy(self):
-        return CodePair(self.base, self.quote)
-
 class Stock:
     """
     Stock consists from code and quantity.

@@ -8,10 +8,7 @@ from pathlib import Path
 from typing import Optional, Union, Iterable, List
 
 from .core import is_instance_list
-from .const import Const
 from .stock import as_numeric, Numeric, Stock, Rate
-
-TRADE = Const({'BUY', 'SELL', 'DEPOSIT', 'WITHDRAW'})
 
 class Transfer:
     """Transfer of funds outside of transactions.
@@ -588,7 +585,7 @@ class History:
                 code_Y = rep.iloc[0]['code_Y']
 
                 pos_idx = (hist._df['from'] == code_X) & (hist._df['to'] == code_Y)
-                pos = History(hist._df[pos_idx], copy=False)
+                pos = History(hist._df[pos_idx])
                 
                 desc = pos.describe(code_X, code_Y)
                 desc['used'] = rep['X(s)'].sum()
@@ -612,7 +609,7 @@ class History:
                 if len(pos) != 0:
                     break
                 
-                desc = History.from_dataframe(rec, copy=False).describe(code_X, code_Y)
+                desc = History(rec).describe(code_X, code_Y)
                 ret.append(desc)
             
             df = pd.concat([df, pd.DataFrame(ret)], axis=0)
@@ -639,7 +636,6 @@ class TradeSummary:
             'capital', 'via', 'used', 'earned', 'position', 'hold', 'rate_mean',
             'position_min', 'hold_min', 'rate_min', 'position_max', 'hold_max', 'rate_max',
         ])
-
 
 class Report:
     @staticmethod

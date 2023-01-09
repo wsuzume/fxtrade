@@ -6,19 +6,19 @@ from io import StringIO
 from pathlib import Path
 from typing import Iterable, Optional, Type, Union
 
-from .api import ChartAPI, TradeAPI
-from .stock import Numeric, CodePair, Stock, Rate
+from .api import CodePair, ChartAPI, TradeAPI
+from .stock import Numeric, Stock, Rate
 from .trade import Trade, History
 from .chart import Chart
 from .trader import Trader
 from .wallet import Wallet
 
 class FX:
-    def __init__(self, origin: str, trader_api=None, chart_api=None, data_dir=None):
+    def __init__(self, origin: str, chart_api=None, trader_api=None, data_dir=None):
         self._origin = origin
 
-        self._trader_api = trader_api
         self._chart_api = chart_api
+        self._trader_api = trader_api
 
         self._data_dir = None if data_dir is None else Path(data_dir)
 
@@ -26,7 +26,7 @@ class FX:
     
     def __getitem__(self, key):
         return self.market[key]
-        
+
     def __repr__(self):
         return self.dumps()
 
@@ -56,13 +56,13 @@ class FX:
     @property
     def trader_api(self):
         if self._trader_api is None:
-            raise RuntimeError("default trader api not defined")
+            raise RuntimeError("default trader api is not defined")
         return self._trader_api
     
     @property
     def chart_api(self):
         if self._chart_api is None:
-            raise RuntimeError("default chart api not defined")
+            raise RuntimeError("default chart api is not defined")
         return self._chart_api
 
     @property

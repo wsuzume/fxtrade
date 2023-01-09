@@ -4,24 +4,23 @@ from pathlib import Path
 from typing import Iterable, Optional, Type, Union
 
 from .trade import History
-from .api import TradeAPI
+from .api import CodePair, TradeAPI
 from .chart import Chart
 # from .dirmap import DirMap
-from .stock import CodePair
 from .wallet import Wallet
 
 from .stocks import JPY, BTC
 
 class Trader:
     def __init__(self,
-                 code_pair: CodePair,
                  api: Type[TradeAPI],
+                 code_pair: CodePair,
                  chart: Chart,
                  wallet: Wallet=None,
                  history: History=None,
                  data_dir: Optional[Union[str, Path]]=None):
-        self.code_pair = code_pair.copy()
         self.api = api
+        self.code_pair = code_pair.copy()
         self.chart = chart
         self.wallet = Wallet(wallet)[[self.code_pair.base, self.code_pair.quote]]
         self.history = History(history)
@@ -36,8 +35,8 @@ class Trader:
     def dump(self, f, indent=4, nest=1):
         tab = " " * indent * nest
         last_tab = " " * (indent * (nest - 1))
-        f.write(f"Trader(code_pair={self.code_pair},\n")
-        f.write(f"{tab}api={self.api},\n")
+        f.write(f"Trader(api={self.api},\n")
+        f.write(f"{tab}code_pair={self.code_pair},\n")
         f.write(f"{tab}data_dir='{self.data_dir}',\n")
         f.write(f"{tab}wallet=")
         self.wallet.dump(f, indent=indent, nest=nest + 1)
@@ -118,6 +117,25 @@ class Trader:
 #             raise ValueError('over maximum')
             
 #         return self.api.sell(float(trade.x.q), t=trade.t)
+
+class TraderDummyAPI(TradeAPI):
+    def __init__(self):
+        pass
+
+    def __repr__(self):
+        return f"TraderDummyAPI()"
+
+    def minimum_order_quantity(self, code, t=None):
+        qs = {
+            'BTC': BTC('0.001'),
+        }
+        return qs[code]
+    
+    def maximum_order_quantity(self, code, t=None):
+        qs = {
+            'BTC': BTC('1000'),
+        }
+        return qs[code]
 
 # class TraderEmulatorAPI(TradeAPI):
 #     def __init__(self, trader, chart, data_dir):
