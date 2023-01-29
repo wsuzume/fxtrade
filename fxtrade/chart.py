@@ -261,7 +261,7 @@ class Chart:
         f.write(f"Chart(api={self.api},\n")
         f.write(f"{tab}code_pair={self.code_pair},\n")
         f.write(f"{tab}data_dir='{self.data_dir}',\n")
-        f.write(f"{tab}crange_period={list(self.board.keys())},\n")
+        f.write(f"{tab}crange_period={self.crange_period},\n")
         f.write(f"{tab}board={{\n")
         for key, board in self.board.items():
             f.write(f"{tabtab}'{key}': ")
@@ -275,6 +275,29 @@ class Chart:
             self.dump(f, indent=indent)
             ret = f.getvalue()
         return ret
+    
+    @property
+    def crange_period(self):
+        return list(self.board.keys())
+
+    def create_emulator(self, data_dir, source_dir):
+        chart_api = ChartEmulatorAPI(api=self.api, source_dir=source_dir)
+        
+        return Chart(
+            api=chart_api,
+            code_pair=self.code_pair,
+            data_dir=data_dir,
+            crange_period=self.crange_period,
+        )
+        
+#         emulator_dir = Path(emulator_dir)
+#         data_dir = Path(data_dir)
+
+#         self.save(data_dir=emulator_dir)
+
+#         api = ChartEmulatorAPI(self, emulator_dir)
+
+#         return self.copy(api=api, data_dir=data_dir)
 
     def _to_code_pair(self, code_pair: Union[str, CodePair]):
         if isinstance(code_pair, str):
@@ -361,15 +384,6 @@ class Chart:
         
 #         return chart
 
-#     def create_emulator(self, emulator_dir: Union[str, Path], data_dir: Union[str, Path]):
-#         emulator_dir = Path(emulator_dir)
-#         data_dir = Path(data_dir)
-
-#         self.save(data_dir=emulator_dir)
-
-#         api = ChartEmulatorAPI(self, emulator_dir)
-
-#         return self.copy(api=api, data_dir=data_dir)
 
 #     @property
 #     def dfs(self):
@@ -464,19 +478,18 @@ class ChartDummyAPI(ChartAPI):
 
 class ChartEmulatorAPI(ChartAPI):
     def __init__(self,
-                 chart: Chart=None,
-                 root_dir: Path=None,
+                 api,
+                 source_dir: Path=None,
                 ):
-        
-        if chart is not None:
-            self.api = chart.api
-            self.board = { k: v.copy() for k, v in chart.board.items() }
-            self.root_dir = Path(root_dir)
+        self._api = api.freeze()
+        self._source_dir = source_dir
+    
+    def __repr__(self):
+        return f"ChartEmulatorAPI(api={self._api.__class__.__name__}, source_dir='{self._source_dir}')"
 
-            for board in chart.board.values():
-                dir_path = self.root_dir / board.code_pair / board.crange_interval
-                board.sync(dir_path, update=False)
-     
+    def freeze(self):
+        raise RuntimeError("can't freeze any more.")
+
 #     @property
 #     def empty(self):
 #         return self.api.empty
@@ -496,10 +509,17 @@ class ChartEmulatorAPI(ChartAPI):
 #     @property
 #     def max_cranges(self):
 #         return self.api.max_cranges
+
+    def is_valid_crange_period(self, crange_period: str) -> bool:
+        return self._api.is_valid_crange_period(crange_period)
+
+    @property
+    def default_crange_period(self):
+        return self._api.default_crange_period
     
-#     @property
-#     def default_crange_interval(self):
-#         return '1mo-15m'
+    @property
+    def empty(self):
+        return self._api.empty
 
 #     @property
 #     def default_crange_intervals(self):

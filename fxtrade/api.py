@@ -110,6 +110,10 @@ class ChartAPI(ABC):
     def __init__(self):
         pass
 
+    @abstractmethod
+    def freeze(self):
+        pass
+
 #     @property
 #     @abstractmethod
 #     def code_pairs(self) -> List[CodePair]:
@@ -159,16 +163,16 @@ class ChartAPI(ABC):
 #     def default_save_iterator(self) -> Callable:
 #         pass
     
-#     @property
-#     @abstractmethod
-#     def empty(self) -> pd.DataFrame:
-#         pass
+    @property
+    @abstractmethod
+    def empty(self) -> pd.DataFrame:
+        pass
 
 #     @abstractmethod
 #     def download(self, code_pair, crange, period, t, as_dataframe: bool) -> pd.DataFrame:
 #         pass
 
-class TradeAPI(ABC):
+class TraderAPI(ABC):
     # @staticmethod
     # def make_ticker(from_code, to_code) -> str:
     #     return f"{from_code}-{to_code}"
@@ -187,6 +191,10 @@ class TradeAPI(ABC):
 
     @abstractmethod
     def __init__(self, api_key, api_secret):
+        pass
+
+    @abstractmethod
+    def freeze(self):
         pass
     
 #     @abstractmethod

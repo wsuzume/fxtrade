@@ -1,26 +1,48 @@
 import json
+import glob
 
 from datetime import datetime
 from io import StringIO
 
 from pathlib import Path
-from typing import Iterable, Optional, Type, Union
+from typing import Any, Iterable, Optional, Type, Union
 
-from .api import CodePair, ChartAPI, TradeAPI
+from .core import type_checked
+from .api import CodePair, ChartAPI, TraderAPI
 from .stock import Numeric, Stock, Rate
 from .trade import Trade, History
-from .chart import Chart
-from .trader import Trader
+from .chart import Chart, ChartEmulatorAPI
+from .trader import Trader, TraderEmulatorAPI
 from .wallet import Wallet
+from .logger import Logger
+
+def assert_valid_name(name):
+    if name == '':
+        raise ValueError(f"null string is not allowed for name.")
+
+    return True
 
 class FX:
-    def __init__(self, origin: str, chart_api=None, trader_api=None, data_dir=None):
-        self._origin = origin
+    def __init__(self,
+            name: str,
+            origin: str,
+            chart_api: Type[ChartAPI]=None,
+            trader_api: Type[TraderAPI]=None,
+            data_dir: Optional[Union[str, Path]]=None,
+            logger: Any=None):
+        self._name = type_checked(name, str)
+        assert_valid_name(self.name)
 
-        self._chart_api = chart_api
-        self._trader_api = trader_api
+        self._origin = type_checked(origin, str)
 
-        self._data_dir = None if data_dir is None else Path(data_dir)
+        self._chart_api = type_checked(chart_api, ChartAPI) \
+                            if chart_api is not None else None
+        self._trader_api = type_checked(trader_api, TraderAPI) \
+                            if trader_api is not None else None
+
+        self._data_dir = Path(data_dir) if data_dir is not None else None
+
+        self._logger = self.set_logger(logger)
 
         self._market = {}
     
@@ -33,7 +55,8 @@ class FX:
     def dump(self, f, indent=4):
         tab = " " * indent
         tabtab = " " * (indent * 2)
-        f.write(f"FX(origin='{self.origin}',\n")
+        f.write(f"FX(name='{self.name}',\n")
+        f.write(f"{tab}origin='{self.origin}',\n")
         f.write(f"{tab}data_dir='{self.data_dir}',\n")
         f.write(f"{tab}markets={{\n")
         for key, trader in self._market.items():
@@ -48,10 +71,18 @@ class FX:
             self.dump(f, indent=indent)
             ret = f.getvalue()
         return ret
+    
+    @property
+    def name(self):
+        return self._name
 
     @property
     def origin(self):
         return self._origin
+
+    @property
+    def logger(self):
+        return self._logger
 
     @property
     def trader_api(self):
@@ -67,19 +98,25 @@ class FX:
 
     @property
     def data_dir(self):
-        return self._data_dir
+        return self._data_dir / self.name
 
     @property
     def trader_dir(self):
         if self._data_dir is None:
             raise RuntimeError("data_dir not defined")
-        return self._data_dir / 'trader'
+        return self.data_dir / 'trader'
     
     @property
     def chart_dir(self):
         if self._data_dir is None:
             raise RuntimeError("data_dir not defined")
-        return self._data_dir / 'chart'
+        return self.data_dir / 'chart'
+
+    @property
+    def log_dir(self):
+        if self._data_dir is None:
+            raise RuntimeError("data_dir is not defined")
+        return self.data_dir / 'log'
 
     @property
     def market(self):
@@ -97,7 +134,7 @@ class FX:
                           key: Optional[str]=None,
                           wallet: Wallet=None,
                           history: History=None,
-                          trader_api: Optional[Type[TradeAPI]]=None,
+                          trader_api: Optional[Type[TraderAPI]]=None,
                           chart_api: Optional[Type[ChartAPI]]=None,
                           trader_dir: Optional[Union[str, Path]]=None,
                           chart_dir: Optional[Union[str, Path]]=None,
@@ -105,8 +142,8 @@ class FX:
         trader_api = trader_api if trader_api is not None else self.trader_api
         chart_api = chart_api if chart_api is not None else self.chart_api
         
-        trader_dir = trader_dir if trader_dir is not None else self.trader_dir
-        chart_dir = chart_dir if chart_dir is not None else self.chart_dir
+        trader_dir = Path(trader_dir) if trader_dir is not None else self.trader_dir
+        chart_dir = Path(chart_dir) if chart_dir is not None else self.chart_dir
 
         code_pair = CodePair(code, self.origin)
 
@@ -121,14 +158,56 @@ class FX:
             history=history,
             data_dir=trader_dir
         )
+    
+    def set_logger(self,
+                   logger: Any=None,
+                   log_dir: Optional[Union[str, Path]]=None
+                  ):
+        log_dir = Path(log_dir) if log_dir is not None else self.log_dir
 
-#     def create_emulator(self, emulator_dir, data_dir):
-#         fx = FX(self.origin, data_dir=data_dir)
+        if logger is None:
+            self._logger = None
+        elif isinstance(logger, bool):
+            if not logger:
+                self._logger = None
+            else:
+                self._logger = Logger(self.name, log_dir)
+        else:
+            self._logger = logger
+
+        return self._logger
+
+    def _list_data_dir(self):
+        xs = sorted(glob.glob(str(self._data_dir / '*')))
+        return [ Path(x).name for x in xs ]
+
+    def create_emulator(self, name, data_dir=None, trader_src_dir=None, chart_src_dir=None):
+        name = type_checked(name, str)
+        assert_valid_name(name)
+
+        data_dir = Path(data_dir) if data_dir is not None else Path(self._data_dir)
+        trader_src_dir = Path(trader_src_dir) \
+            if trader_src_dir is not None else Path(self.trader_dir)
+        chart_src_dir = Path(chart_src_dir) \
+            if chart_src_dir is not None else Path(self.chart_dir)
+
+        fx = FX(name=name, origin=self.origin, data_dir=data_dir)
+
+        if (fx._data_dir.absolute() == self._data_dir.absolute()) \
+            and (fx.name in self._list_data_dir()):
+            # Saving emulator's data in true trader's data directory is very dangerous.
+            # And if using the same name with true traders, it will destroy true data. 
+            raise ValueError(f"'{fx.name}' is already exists in '{fx._data_dir}'.")
         
-#         for key, trader in self.market.items():
-#             fx._market[key] = trader.create_emulator(emulator_dir, fx.trader_dir, fx.chart_dir)
+        for key, trader in self._market.items():
+            fx._market[key] = trader.create_emulator(
+                                trader_data_dir=fx.trader_dir,
+                                chart_data_dir=fx.chart_dir,
+                                trader_src_dir=trader_src_dir,
+                                chart_src_dir=chart_src_dir,
+                              )
 
-#         return fx
+        return fx
 
 #     @property
 #     def wallet(self):

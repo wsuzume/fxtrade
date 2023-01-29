@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Iterable, Optional, Type, Union
 
 from .trade import History
-from .api import CodePair, TradeAPI
+from .api import CodePair, TraderAPI
 from .chart import Chart
 # from .dirmap import DirMap
 from .wallet import Wallet
@@ -13,7 +13,7 @@ from .stocks import JPY, BTC
 
 class Trader:
     def __init__(self,
-                 api: Type[TradeAPI],
+                 api: Type[TraderAPI],
                  code_pair: CodePair,
                  chart: Chart,
                  wallet: Wallet=None,
@@ -52,10 +52,21 @@ class Trader:
             ret = f.getvalue()
         return ret
     
-#     def create_emulator(self, emulator_dir, trader_dir, chart_dir):
-#         chart = self.chart.create_emulator(emulator_dir, chart_dir)
-#         api = TraderEmulatorAPI(self, chart, emulator_dir)
-#         return Trader(code_pair=self.code_pair, api=api, chart=chart, wallet=self.wallet, history=self.history, data_dir=trader_dir)
+    def create_emulator(self, trader_data_dir, chart_data_dir, trader_src_dir, chart_src_dir):
+        trader_api = TraderEmulatorAPI(api=self.api, source_dir=trader_src_dir)
+        chart = self.chart.create_emulator(data_dir=chart_data_dir, source_dir=chart_src_dir)
+
+        return Trader(
+            api=trader_api,
+            code_pair=self.code_pair,
+            chart=chart,
+            wallet=self.wallet,
+            history=self.history,
+            data_dir=trader_data_dir,
+        )
+        # chart = self.chart.create_emulator(emulator_dir, chart_dir)
+        # api = TraderEmulatorAPI(self, chart, emulator_dir)
+        # return Trader(code_pair=self.code_pair, api=api, chart=chart, wallet=self.wallet, history=self.history, data_dir=trader_dir)
     
 #     def get_wallet(self, codes=None):
 #         return self.api.get_balance().filter_stocks(codes)
@@ -118,7 +129,7 @@ class Trader:
             
 #         return self.api.sell(float(trade.x.q), t=trade.t)
 
-class TraderDummyAPI(TradeAPI):
+class TraderDummyAPI(TraderAPI):
     def __init__(self):
         pass
 
@@ -137,8 +148,17 @@ class TraderDummyAPI(TradeAPI):
         }
         return qs[code]
 
-# class TraderEmulatorAPI(TradeAPI):
-#     def __init__(self, trader, chart, data_dir):
+class TraderEmulatorAPI(TraderAPI):
+    def __init__(self, api, source_dir=None):
+        self._api = api.freeze()
+        self._source_dir = source_dir
+    
+    def __repr__(self):
+        return f"TraderEmulatorAPI(api={self._api.__class__.__name__}, source_dir='{self._source_dir}')"
+
+    def freeze(self):
+        raise RuntimeError(f"can't freeze any more.")
+        
 #         self.api = trader.api
 #         self.wallet = trader.wallet.copy()
 #         self.history = trader.history.copy()
