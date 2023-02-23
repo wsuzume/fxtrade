@@ -7,14 +7,14 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Iterable, Optional, Type, Union
 
-from .core import type_checked
+from .core import type_checked, is_instance_list
 from .api import CodePair, ChartAPI, TraderAPI
 from .stock import Numeric, Stock, Rate
 from .trade import Trade, History
 from .chart import Chart, ChartEmulatorAPI
 from .trader import Trader, TraderEmulatorAPI
 from .wallet import Wallet
-from .logger import Logger
+from .logger import Logger, is_logger
 
 def assert_valid_name(name):
     if name == '':
@@ -121,6 +121,18 @@ class FX:
     @property
     def market(self):
         return self._market
+    
+    def get_market(self, key=None):
+        if key is None:
+            market = self._market
+        elif isinstance(key, str):
+            market = { key: self._market[key] }
+        elif is_instance_list(key, str):
+            market = { k: self._market[k] for k in key }
+        else:
+            raise TypeError(f"key must be instance of NoneType, str, Iterable[str].")
+        
+        return market
 
 #     def initial(self, q: Numeric):
 #         return Stock(self.origin, q)
@@ -166,13 +178,10 @@ class FX:
         log_dir = Path(log_dir) if log_dir is not None else self.log_dir
 
         if logger is None:
-            self._logger = None
-        elif isinstance(logger, bool):
-            if not logger:
-                self._logger = None
-            else:
-                self._logger = Logger(self.name, log_dir)
+            self._logger = Logger(self.name, None)
         else:
+            if not is_logger(logger):
+                raise ValueError(f"not logger.")
             self._logger = logger
 
         return self._logger
@@ -209,23 +218,117 @@ class FX:
 
         return fx
 
-#     @property
-#     def wallet(self):
-#         w = Wallet()
-#         for trader in self._market.values():
-#             w += trader.wallet
-#         return w
+    @property
+    def wallet(self):
+        w = Wallet()
+        for trader in self._market.values():
+            w += trader.wallet
+        return w
+    
+    @property
+    def wallets(self):
+        ws = {}
+        for key, trader in self._market.items():
+            ws[key] = trader.wallet.copy()
+        return ws
 
-#     def get_wallet(self):
-#         w = Wallet()
-#         for trader in self._market.values():
-#             w += trader.get_wallet()
-#         return w
+    def save_wallet(self, key=None, t=None, append=False, verbose=False):
+        market = self.get_market(key)
 
-#     def sync_wallet(self):
-#         for trader in self._market.values():
-#             trader.sync_wallet()
-#         return self.wallet
+        if len(market) == 0:
+            self.logger.info(f"FX save_wallet() ... no trader to save.")
+        paths = {}
+        for key, trader in market.items():
+            path, msg = trader.save_wallet(t=t, append=append, verbose=True)
+            paths[key] = path
+
+            if verbose:
+                self.logger.info(msg)
+
+            self.logger.info(f"FX['{key}'] save_wallet() -> '{path}'.")
+
+        return paths
+    
+    def read_wallet(self, key=None, total=False):
+        market = self.get_market(key)
+
+        if len(market) == 0:
+            self.logger.info(f"FX read_wallet() ... no trader to read.")
+        
+        ws = {}
+        for key, trader in market.items():
+            w, path = trader.read_wallet(return_t=False, verbose=True)
+            ws[key] = w
+            self.logger.info(f"FX['{key}'] read_wallet() <- '{path}'.")
+        
+        if not total:
+            return ws
+        
+        return Wallet.total(ws)
+
+    def load_wallet(self, key=None, total=False):
+        market = self.get_market(key)
+
+        if len(market) == 0:
+            self.logger.info(f"FX load_wallet() ... no trader to load.")
+        for key, trader in market.items():
+            _, path = trader.load_wallet(return_t=False, verbose=True)
+            self.logger.info(f"FX['{key}'] load_wallet() <- '{path}'.")
+        
+        if not total:
+            return self.wallets
+        
+        return self.wallet
+
+    def download_wallet(self, key=None, total=False):
+        market = self.get_market(key)
+
+        if len(market) == 0:
+            self.logger.info(f"FX download_wallet() ... no trader to download.")
+
+        ws = {}
+        for key, trader in market.items():
+            ws[key] = trader.download_wallet()
+            self.logger.info(f"FX['{key}'] download_wallet() <- {trader.api}.")
+        
+        if not total:
+            return ws
+        
+        return Wallet.total(ws)
+    
+    def update_wallet(self, key=None, total=False):
+        market = self.get_market(key)
+
+        if len(market) == 0:
+            self.logger.info(f"FX update_wallet() ... no trader to update.")
+        
+        for key, trader in market.items():
+            trader.update_wallet()
+            self.logger.info(f"FX['{key}'] update_wallet() <- {trader.api}.")
+        
+        if not total:
+            return self.wallets
+        
+        return self.wallet
+    
+    def sync_wallet(self, key=None, total=False, verbose: bool=False):
+        market = self.get_market(key)
+
+        if len(market) == 0:
+            self.logger.info(f"FX sync_wallet() ... no trader to sync.")
+        
+        for key, trader in market.items():
+            _, path, msg = trader.sync_wallet(verbose=True)
+
+            if verbose:
+                self.logger.info(msg)
+
+            self.logger.info(f"FX['{key}'] sync_wallet() <- {trader.api} -> {path}.")
+        
+        if not total:
+            return self.wallets
+        
+        return self.wallet
     
 #     @property
 #     def history(self):

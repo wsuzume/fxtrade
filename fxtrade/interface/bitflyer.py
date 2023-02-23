@@ -21,68 +21,68 @@ from requests.exceptions import RequestException
 
 from typing import Union, Optional
 
-from ..api import CodePair, TradeAPI
+from ..api import CodePair, TraderAPI
 from ..trade import Transfer, Trade, History
 from ..stock import Stock, Rate
 from ..stocks import JPY, BTC
 from ..wallet import Wallet
 
-# # def build_headers(api_key: str, api_secret: str, method: str, endpoint: str, body: str='') -> dict:
-# #     timestamp = str(time.time())
+def build_headers(api_key: str, api_secret: str, method: str, endpoint: str, body: str=None) -> dict:
+    timestamp = str(time.time())
     
-# #     if body is None:
-# #         message = timestamp + method + endpoint
-# #     else:
-# #         message = timestamp + method + endpoint + body
+    if body is None:
+        message = timestamp + method + endpoint
+    else:
+        message = timestamp + method + endpoint + body
         
-# #     signature = hmac.new(api_secret.encode('utf-8'), message.encode('utf-8'),
-# #                          digestmod=hashlib.sha256).hexdigest()
+    signature = hmac.new(api_secret.encode('utf-8'), message.encode('utf-8'),
+                         digestmod=hashlib.sha256).hexdigest()
     
-# #     headers = {
-# #         'Content-Type': 'application/json',
-# #         'ACCESS-KEY': api_key,
-# #         'ACCESS-TIMESTAMP': timestamp,
-# #         'ACCESS-SIGN': signature
-# #     }
+    headers = {
+        'Content-Type': 'application/json',
+        'ACCESS-KEY': api_key,
+        'ACCESS-TIMESTAMP': timestamp,
+        'ACCESS-SIGN': signature
+    }
     
-# #     return headers
+    return headers
 
-# # def query_string(params):
-# #     return '&'.join([ str(k) + '=' + str(v) for k, v in params.items() ])
+def query_string(params):
+    return '&'.join([ str(k) + '=' + str(v) for k, v in params.items() ])
 
-# # def send_request(base_url, endpoint, method='GET', body=None, params=None, api_key=None, api_secret=None):
-# #     url = urljoin(base_url, endpoint)
+def send_request(base_url, endpoint, method='GET', body=None, params=None, api_key=None, api_secret=None):
+    url = urljoin(base_url, endpoint)
     
-# #     func = {
-# #         'GET': requests.get,
-# #         'POST': requests.post,
-# #     }
+    func = {
+        'GET': requests.get,
+        'POST': requests.post,
+    }
     
-# #     if params is not None:
-# #         endpoint = endpoint + '?' + query_string(params)
+    if params is not None:
+        endpoint = endpoint + '?' + query_string(params)
     
-# #     if api_key is None:
-# #         return func[method](url, data=body, params=params)
-# #     else:
-# #         headers = build_headers(api_key, api_secret, method, endpoint=endpoint, body=body)
-# #         return func[method](url, headers=headers, data=body, params=params)
+    if api_key is None:
+        return func[method](url, data=body, params=params)
+    else:
+        headers = build_headers(api_key, api_secret, method, endpoint=endpoint, body=body)
+        return func[method](url, headers=headers, data=body, params=params)
 
-# # def get_balance(api_key, api_secret):
-# #     base_url = 'https://api.bitflyer.com'
-# #     endpoint = '/v1/me/getbalance'
+def get_balance(api_key, api_secret):
+    base_url = 'https://api.bitflyer.com'
+    endpoint = '/v1/me/getbalance'
     
-# #     return send_request(base_url, endpoint, method='GET', api_key=api_key, api_secret=api_secret)
+    return send_request(base_url, endpoint, method='GET', api_key=api_key, api_secret=api_secret)
 
-# # def get_balance_history(api_key, api_secret, currency_code='JPY'):
-# #     base_url = 'https://api.bitflyer.com'
-# #     endpoint = '/v1/me/getbalancehistory'
+def get_balance_history(api_key, api_secret, currency_code='JPY'):
+    base_url = 'https://api.bitflyer.com'
+    endpoint = '/v1/me/getbalancehistory'
     
-# #     params = {
-# #         "currency_code": currency_code,
-# #         "count": str(100),
-# #     }
+    params = {
+        "currency_code": currency_code,
+        "count": str(100),
+    }
 
-# #     return send_request(base_url, endpoint, method='GET', params=params, api_key=api_key, api_secret=api_secret)
+    return send_request(base_url, endpoint, method='GET', params=params, api_key=api_key, api_secret=api_secret)
 
 # # def get_ticker(product_code='btc_jpy'):
 # #     base_url = 'https://api.bitflyer.com'
@@ -184,7 +184,7 @@ from ..wallet import Wallet
 
 # #     return History(ret)
 
-class BitflyerAPI(TradeAPI):
+class BitflyerAPI(TraderAPI):
     # @staticmethod
     # def make_ticker(from_code, to_code):
     #     return f"{from_code}_{to_code}"
@@ -202,92 +202,70 @@ class BitflyerAPI(TradeAPI):
         raise TypeError("unrecognized type arguments")
 
     def __init__(self, api_key, api_secret):
-        self.api_key = api_key
-        self.api_secret = api_secret
+        self._api_key = api_key
+        self._api_secret = api_secret
     
+    @property
+    def api_key(self):
+        return self._api_key
+    
+    @property
+    def api_secret(self):
+        return self._api_secret
+
     def __repr__(self):
+        if self.api_key == '[frozen]' and self.api_secret == '[frozen]':
+            return f"BitflyerAPI(api_key='{self.api_key}', " + \
+                f"api_secret='{self.api_secret}')"
         return f"BitflyerAPI(api_key='{self.api_key[:4]}...', " + \
             f"api_secret='{self.api_secret[:4]}...')"
 
-# #     def minimum_order_quantity(self, code):
-# #         qs = {
-# #             'BTC': BTC('0.001')
-# #         }
-# #         return qs[code]
-    
-# #     def maximum_order_quantity(self, code):
-# #         qs = {
-# #             'BTC': BTC('1000')
-# #         }
-# #         return qs[code]
-    
-# #     def get_commission(self, product_code=None):
-# #         if product_code is None:
-# #             product_code = 'BTC_JPY'
-        
-# #         try:
-# #             response = get_commission(self.api_key, self.api_secret, product_code)
-# #             response.raise_for_status()
-# #         except RequestException as e:
-# #             print(e)
-# #             response = None
-            
-# #         resp = response.json()
-        
-# #         return Fraction(str(resp['commission_rate']))
-    
-# #     def get_ticker(self, code, t=None):
-# #         if code is None:
-# #             code = 'btc_jpy'
-        
-# #         try:
-# #             response = get_ticker(product_code=code)
-# #             response.raise_for_status()
-# #         except RequestException as e:
-# #             print(e)
-# #             response = None
-        
-# #         return response.json()
-    
-# #     def get_best_bid(self, code):
-# #         ticker = self.get_ticker(code=code)
-        
-# #         # 買い値
-# #         bid_rate = Rate(from_code='BTC', to_code='JPY', r=str(ticker['best_bid']))
-        
-# #         return bid_rate
-    
-# #     def get_best_ask(self, code):
-# #         ticker = self.get_ticker(code=code)
+    def freeze(self):
+        return BitflyerAPI(api_key='[frozen]', api_secret='[frozen]')
 
-# #         # 売り値
-# #         ask_rate = Rate(from_code='BTC', to_code='JPY', r=str(ticker['best_ask']))
-        
-# #         return ask_rate
+    def minimum_order_quantity(self, code, t=None):
+        qs = {
+            'BTC': BTC('0.001')
+        }
+        return qs[code]
     
-# #     def get_balance(self):
-# #         try:
-# #             response = get_balance(self.api_key, self.api_secret)
-# #             response.raise_for_status()
-# #         except RequestException as e:
-# #             print(e)
-# #             response = None
+    def maximum_order_quantity(self, code, t=None):
+        qs = {
+            'BTC': BTC('1000')
+        }
+        return qs[code]
+
+    # def get_commission(self, product_code=None):
+    #     if product_code is None:
+    #         product_code = 'BTC_JPY'
+        
+    #     try:
+    #         response = get_commission(self.api_key, self.api_secret, product_code)
+    #         response.raise_for_status()
+    #     except RequestException as e:
+    #         print(e)
+    #         response = None
             
-# #         stocks = response.json()
+    #     resp = response.json()
         
-# #         w = Wallet()
-# #         for stock in stocks:
-# #             w.add(Stock(stock['currency_code'], str(stock['available'])))
-# #         return w
+    #     return Fraction(str(resp['commission_rate']))
+
+    def download_wallet(self):
+        response = get_balance(self.api_key, self.api_secret)
+        response.raise_for_status()
+            
+        stocks = response.json()
         
-# #     def get_balance_history(self, currency_code='JPY'):
-# #         try:
-# #             response = get_balance_history(self.api_key, self.api_secret, currency_code=currency_code)
-# #             response.raise_for_status()
-# #         except RequestException as e:
-# #             print(e)
-# #             response = None
-# #         return response.json()
+        w = Wallet()
+        for stock in stocks:
+            w.add(Stock(stock['currency_code'], str(stock['available'])))
+
+        return w
+    
+        
+    def get_balance_history(self, currency_code='JPY'):
+        response = get_balance_history(self.api_key, self.api_secret, currency_code=currency_code)
+        return response 
     
 # #     def get_cashflow(self, start_date=None):
 # #         df_jpy = pd.DataFrame.from_dict(self.get_balance_history(currency_code='JPY'))
@@ -333,6 +311,36 @@ class BitflyerAPI(TradeAPI):
 # #         df = self.get_cashflow(start_date)
 # #         return cashflow_to_history(df)
     
+     
+# #     def get_ticker(self, code, t=None):
+# #         if code is None:
+# #             code = 'btc_jpy'
+        
+# #         try:
+# #             response = get_ticker(product_code=code)
+# #             response.raise_for_status()
+# #         except RequestException as e:
+# #             print(e)
+# #             response = None
+        
+# #         return response.json()
+    
+# #     def get_best_bid(self, code):
+# #         ticker = self.get_ticker(code=code)
+        
+# #         # 買い値
+# #         bid_rate = Rate(from_code='BTC', to_code='JPY', r=str(ticker['best_bid']))
+        
+# #         return bid_rate
+    
+# #     def get_best_ask(self, code):
+# #         ticker = self.get_ticker(code=code)
+
+# #         # 売り値
+# #         ask_rate = Rate(from_code='BTC', to_code='JPY', r=str(ticker['best_ask']))
+        
+# #         return ask_rate
+
 # #     def buy(self, size, t=None):
 # #         try:
 # #             response = order(self.api_key, self.api_secret, 'BUY', 'MARKET', 0, size)

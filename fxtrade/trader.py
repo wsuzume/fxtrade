@@ -1,12 +1,15 @@
+import pandas as pd
+
 from io import StringIO
 from fractions import Fraction
 from pathlib import Path
 from typing import Iterable, Optional, Type, Union
 
+from . import dirmap
+
 from .trade import History
 from .api import CodePair, TraderAPI
 from .chart import Chart
-# from .dirmap import DirMap
 from .wallet import Wallet
 
 from .stocks import JPY, BTC
@@ -26,6 +29,14 @@ class Trader:
         self.history = History(history)
         self.data_dir = data_dir
     
+    @property
+    def wallet(self):
+        return self._wallet
+    
+    @wallet.setter
+    def wallet(self, w):
+        self._wallet = w
+
     def __getitem__(self, key):
         return self.chart[key]
 
@@ -68,14 +79,57 @@ class Trader:
         # api = TraderEmulatorAPI(self, chart, emulator_dir)
         # return Trader(code_pair=self.code_pair, api=api, chart=chart, wallet=self.wallet, history=self.history, data_dir=trader_dir)
     
-#     def get_wallet(self, codes=None):
-#         return self.api.get_balance().filter_stocks(codes)
+    def get_wallet_path(self, path=None):
+        if path is not None:
+            return Path(path)
+        return self.data_dir / 'wallet.csv'
+
+    def save_wallet(self, path=None, t=None, append: bool=False, verbose: bool=False):
+        path = self.get_wallet_path(path)
+
+        _, msg = dirmap.ensure(path.parent, verbose=True)
+        self.wallet.to_csv(path, t=t, append=append)
+        
+        if verbose:
+            return path, msg
+
+        return path
+
+    def read_wallet(self, path=None, return_t: bool=False, verbose: bool=False):
+        path = self.get_wallet_path(path)
+
+        if verbose:
+            return Wallet.from_csv(path, code=self.code_pair, return_t=return_t), path
+
+        return Wallet.from_csv(path, code=self.code_pair, return_t=return_t)
+
+    def load_wallet(self, path=None, return_t: bool=False, verbose: bool=False):
+        (self.wallet, t), path = self.read_wallet(path, return_t=True, verbose=True)
+
+        if return_t and verbose:
+            return (self.wallet, t), path
+        elif return_t:
+            return self.wallet, t
+        elif verbose:
+            return self.wallet, path
+        return self.wallet
+
+    def download_wallet(self):
+        # codes は自動で決定。取引できる対象が trader ごとに固定されるため
+        return self.api.download_wallet()[self.code_pair]
     
-#     def sync_wallet(self, codes=None):
-#         if codes is None:
-#             codes = self.wallet.codes
-#         self.wallet = self.get_wallet(codes)
-#         return self.wallet
+    def update_wallet(self):
+        self.wallet = self.download_wallet()
+        return self.wallet
+
+    def sync_wallet(self, path=None, append=False, verbose: bool=False):
+        self.update_wallet()
+        path, msg = self.save_wallet(path, append=append, verbose=True)
+
+        if verbose:
+            return self.wallet, path, msg
+        
+        return self.wallet, path
     
 #     def get_chart(self, code=None, t=None):
 #         return self.api.get_chart(code, t=t)
@@ -136,6 +190,9 @@ class TraderDummyAPI(TraderAPI):
     def __repr__(self):
         return f"TraderDummyAPI()"
 
+    def freeze(self):
+        return self
+
     def minimum_order_quantity(self, code, t=None):
         qs = {
             'BTC': BTC('0.001'),
@@ -147,35 +204,36 @@ class TraderDummyAPI(TraderAPI):
             'BTC': BTC('1000'),
         }
         return qs[code]
+    
+    def download_wallet(self):
+        return Wallet({'JPY': 0, 'BTC': 0})
 
 class TraderEmulatorAPI(TraderAPI):
     def __init__(self, api, source_dir=None):
         self._api = api.freeze()
-        self._source_dir = source_dir
+        self._source_dir = Path(source_dir)
     
     def __repr__(self):
         return f"TraderEmulatorAPI(api={self._api.__class__.__name__}, source_dir='{self._source_dir}')"
 
     def freeze(self):
         raise RuntimeError(f"can't freeze any more.")
-        
+
 #         self.api = trader.api
 #         self.wallet = trader.wallet.copy()
 #         self.history = trader.history.copy()
 #         self.chart = chart
 #         self.data_dir = Path(data_dir)
 
-#     def minimum_order_quantity(self, code, t=None):
-#         qs = {
-#             'BTC': BTC('0.001'),
-#         }
-#         return qs[code]
+    def minimum_order_quantity(self, code, t=None):
+        return self._api.minimum_order_quantity(code, t)
     
-#     def maximum_order_quantity(self, code, t=None):
-#         qs = {
-#             'BTC': BTC('1000'),
-#         }
-#         return qs[code]
+    def maximum_order_quantity(self, code, t=None):
+        return self._api.maximum_order_quantity(code, t)
+    
+    def download_wallet(self):
+        path = self._source_dir / 'wallet.csv'
+        return Wallet.from_csv(path, return_t=False)
     
 #     def get_balance(self, t=None):
 #         return self.wallet.copy()

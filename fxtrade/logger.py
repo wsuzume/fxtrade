@@ -70,15 +70,15 @@ class Logger:
                  data_dir: Optional[Union[str, Path]]):
         self._name = type_checked(name, str)
         self._data_dir = Path(data_dir) if data_dir is not None else None
-        self._logfile_name = self._data_dir / 'log'
+        #self._logfile_name = self._data_dir / 'log'
 
         if self._name == '':
             raise ValueError("root logger not allowed.")
 
         handler = [ console_handler() ]
 
-        if self.filename is not None:
-            handler.append(file_handler(self.filename))
+        # if self._data_dir is not None:
+        #     handler.append(file_handler(self.filename))
 
         self._logger = get_default_logger(self._name, handler)
     
@@ -88,7 +88,7 @@ class Logger:
 
     @property
     def filename(self):
-        return self._filename
+        return self._logfile_name
 
     @property
     def logger(self):

@@ -5,8 +5,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Iterable
 
-from .core import is_instance_list
-from .stock import Stock
+from .api import CodePair
+from .core import is_instance_list, is_instance_dict
+from .stock import Numeric, Stock
 
 class Wallet:
     @staticmethod
@@ -15,14 +16,31 @@ class Wallet:
         return pd.read_csv(path, index_col=0, parse_dates=True).applymap(Fraction)
 
     @classmethod
-    def from_dataframe(cls, df, code=None):
+    def from_dataframe(cls, df, code=None, return_t=False):
         stocks = df.sort_index().iloc[-1]
-        return Wallet(stocks).filter_stocks(code)
+        w = Wallet(stocks).filter_stocks(code)
+        if return_t:
+            return w, stocks.name
+        return w
     
     @classmethod
-    def from_csv(cls, path, code=None):
+    def from_csv(cls, path, code=None, return_t=False):
         df = cls.read_csv(path)
-        return Wallet.from_dataframe(df, code)
+        return Wallet.from_dataframe(df, code, return_t)
+
+    @staticmethod
+    def total(ws):
+        wallet = Wallet()
+        if isinstance(ws, Wallet):
+            wallet += ws
+        elif is_instance_dict(ws, vt=Wallet):
+            for w in ws.values():
+                wallet += w
+        elif is_instance_list(ws, Wallet):
+            for w in ws:
+                wallet += w
+        
+        return wallet
 
     """
     Manage your stocks.
@@ -44,6 +62,8 @@ class Wallet:
     def __getitem__(self, key):
         if isinstance(key, str):
             return self._stocks[key]
+        elif isinstance(key, CodePair):
+            return self[[key.quote, key.base]]
         elif is_instance_list(key, str):
             w = Wallet()
             for k in key:
@@ -56,8 +76,6 @@ class Wallet:
             raise TypeError("")
     
     def __setitem__(self, key, val):
-        # all codes must be upper case
-        key = key.upper()
         if isinstance(val, Stock):
             self._stocks[key] = val
         else:
@@ -85,6 +103,12 @@ class Wallet:
             if code not in self._stocks:
                 raise ValueError(f"'{code}' not in Wallet({self._stocks})")
             self._stocks = { code: self._stocks[code] }
+        elif isinstance(code, CodePair):
+            if code.base not in self._stocks:
+                raise ValueError(f"'{code.base}' not in Wallet({self._stocks})")
+            if code.quote not in self._stocks:
+                raise ValueError(f"'{code.quote}' not in Wallet({self._stocks})")
+            self._stocks = { c: self._stocks[c] for c in [code.base, code.quote] }
         elif is_instance_list(code, str):
             for code in code:
                 if code not in self._stocks:
@@ -137,10 +161,21 @@ class Wallet:
         elif is_instance_list(x, Stock):
             for stock in x:
                 self[stock.code] = stock.copy()
+        elif is_instance_dict(x, kt=str, vt=Numeric):
+            for k, v in x.items():
+                self[k] = Stock(k, v)
         else:
             raise TypeError(f"unsupported type '{x}'")
         
         return self
+
+    def __eq__(self, other):
+        ret = (set(self._stocks.keys()) == set(other._stocks.keys()))
+        for code, stock in self._stocks.items():
+            if code not in other:
+                return False
+            ret &= (stock == other[code])
+        return ret
 
     def add(self, x):
         if isinstance(x, Wallet):

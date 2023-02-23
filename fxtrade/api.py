@@ -5,73 +5,10 @@ from fractions import Fraction
 from typing import Callable, List, Optional, Union
 
 from .core import type_checked
-from .stock import Stock, Rate
-# from .ticker import Ticker
-from .trade import Trade, FailedTrade, History
+from .code import CodePair
+from .period import CRangePeriod
+from .stock import Stock
 from .wallet import Wallet
-
-class CodePair:
-    """
-    The base currency is the first currency in a currency pair.
-    The second is the quote or counter currency.
-    The quote for the currency pair shows how much of the quote currency
-    it takes to purchase one unit of the other.
-    """
-    def __init__(self, base: str, quote: str):
-        self._base = str(base)
-        self._quote = str(quote)
-    
-    @property
-    def base(self):
-        return self._base
-    
-    @property
-    def quote(self):
-        return self._quote
-    
-    def __repr__(self):
-        return f"CodePair(base='{self.base}', quote='{self.quote}')"
-
-    def __str__(self):
-        return f"CodePair(base='{self.base}', quote='{self.quote}')"
-
-    def copy(self):
-        return CodePair(self.base, self.quote)
-
-class CrangePeriod:
-    def __init__(self, crange: str, period: str):
-        self._crange = crange
-        self._period = period
-    
-    @property
-    def crange(self):
-        return self._crange
-    
-    @property
-    def period(self):
-        return self._period
-    
-    def __repr__(self):
-        return f"CrangePeriod(crange='{self.crange}', period='{self.period}')"
-
-    def __str__(self):
-        return f"CrangePeriod(crange='{self.crange}', period='{self.period}')"
-    
-    def copy(self):
-        return CrangePeriod(self.crange, self.period)
-    
-    @property
-    def short(self):
-        return '-'.join([self.crange, self.period])
-
-    def __hash__(self):
-        return hash(self.short)
-    
-    def __eq__(self, other):
-        if isinstance(other, CrangePeriod):
-            if self.crange == other.crange and self.period == other.period:
-                return True
-        return False
 
 class ChartAPI(ABC):
     @staticmethod
@@ -97,14 +34,14 @@ class ChartAPI(ABC):
         return CodePair(base, quote)
 
     @staticmethod
-    def crange_period_from_string(s: str) -> CrangePeriod:
+    def crange_period_from_string(s: str) -> CRangePeriod:
         xs = type_checked(s, str).split('-')
 
         if len(xs) != 2:
             raise ValueError("format must be '{crange}-{period}'")
         
         crange, period = xs
-        return CrangePeriod(crange, period)
+        return CRangePeriod(crange, period)
 
     @abstractmethod
     def __init__(self):
@@ -197,17 +134,17 @@ class TraderAPI(ABC):
     def freeze(self):
         pass
     
-#     @abstractmethod
-#     def minimum_order_quantity(self, code) -> Stock:
-#         pass
+    @abstractmethod
+    def minimum_order_quantity(self, code, t) -> Stock:
+        pass
     
-#     @abstractmethod
-#     def maximum_order_quantity(self, code) -> Stock:
-#         pass
+    @abstractmethod
+    def maximum_order_quantity(self, code, t) -> Stock:
+        pass
     
-#     @abstractmethod
-#     def get_wallet(self) -> Wallet:
-#         pass
+    @abstractmethod
+    def download_wallet(self) -> Wallet:
+        pass
     
 #     @abstractmethod
 #     def get_commission(self, product_code=None) -> Fraction:
