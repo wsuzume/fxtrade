@@ -2,45 +2,80 @@
 # Utilities to assist in processing time series data.
 # """
 
-# import numpy as np
-# import pandas as pd
+import numpy as np
+import pandas as pd
 
-# from datetime import datetime, timedelta
-# from typing import Union, Optional, Iterable
+from datetime import datetime, timedelta
+from typing import Union, Optional, Iterable
 
-# INTERVALS = [
-#     '1m', '5m', '10m', '15m', '30m',
-#     '1h', '3h', '6h', '12h',
-#     '1d', '3d', '5d', '7d',
-# ]
+from .period import is_divisor, to_period_str, parse, DIVISORS
 
-# MINUTES = {'1m': 1, '5m': 5, '10m': 10, '15m': 15, '30m': 30, }
-# HOURS = {'1h': 1, '3h': 3, '6h': 6, '12h': 12, }
-# DAYS = {'1d': 1, '3d': 3, '5d': 5, '7d': 7, }
+def delta(ts: Iterable) -> pd.Timedelta:
+    """
+    Given an equally spaced time index, return the interval.
+    """
+    dts = pd.Series(ts).diff().value_counts()
+    if len(dts) != 1:
+        raise ValueError("all timedelta must be the same")
+    
+    return dts.index[0]
 
-import re
+def split_into_chunks(df: pd.DataFrame):
+    """
+    等間隔で繋がっている部分列に分割する
+    """
+    dts = pd.Series(df.index).diff()[1:]
+    dt = dts.value_counts().index[0]
+    
+    idx = [0] + list(dts[(dts != dt)].index) + [dts.index[-1]]
+    
+    xs = []
+    for begin, end in zip(idx, idx[1:]):
+        xs.append(df.iloc[begin: end].copy())
+    
+    xs = [ x for x in xs if len(x) >= 2 ]
+    
+    return xs
 
-def period():
-    return
+def time_arange(begin, end, dt, with_end=True):
+    if not with_end:
+        return pd.Index(np.arange(begin, end, dt))
+    return pd.Index(np.arange(begin, end + dt, dt))
 
-def period_to_seconds(self, period):
-    table = {
-        '1m': 60,
-        '3m': 180,
-        '5m': 300,
-        '15m': 900,
-        '30m': 1800,
-        '1h': 3600,
-        '2h': 7200,
-        '4h': 14400,
-        '6h': 21600,
-        '12h': 43200,
-        '1d': 86400,
-        '3d': 259200,
-        '1w': 604800,
-    }
+def get_first_timestamp(ts: datetime, period: str) -> pd.Timestamp:
+    if isinstance(period, timedelta):
+        period = to_period_str(period)
 
-    return table[period]
+    if not is_divisor(period):
+        raise ValueError(f"period must be one of {DIVISORS}.")
+    
+    t, u = parse(period)
+    if u in ['d', 'D']:
+        return pd.Timestamp(ts.year, ts.month, ts.day)
+    elif u in ['h', 'H']:
+        return pd.Timestamp(ts.year, ts.month, ts.day,
+                                int(t) * (ts.hour // int(t)))
+    elif u in ['m', 'M']:
+        return pd.Timestamp(ts.year, ts.month, ts.day, ts.hour,
+                                int(t) * (ts.minute // int(t)))
+    elif u in ['s', 'S']:
+        return pd.Timestamp(ts.year, ts.month, ts.day, ts.hour, ts.minute,
+                                int(t) * (ts.second // int(t)))
+    
+    raise RuntimeError('unknown error')
+
+def normalize_time_index(df, begin, end, dt):
+    begin = get_first_timestamp(begin, dt)
+
+    idx = time_arange(begin, end, dt, with_end=True)
+
+    use_idx = pd.Index([ i for i in df.index if i in set(idx) ])
+
+    new_df = pd.DataFrame([], index=idx, columns=df.columns)
+    new_df.loc[use_idx] = df.loc[use_idx]
+
+    return new_df
+
 
 # def with_timestamp(x=None, scope='day', format_str=None):
 #     fmt = {
@@ -88,48 +123,6 @@ def period_to_seconds(self, period):
 #         return pd.Timedelta(days=DAYS[interval])
     
 #     raise RuntimeError("unknown error")
-    
-# # ダウンサンプリング & 中途半端な時間に取得したデータを削除
-# def down_sampling(df: pd.DataFrame, interval: str):
-#     """
-#     Return dataframe which is applied down sampling with specified interval.
-#     Data recorded at the halfway point will be deleted.
-#     """
-#     if interval not in INTERVALS:
-#         raise ValueError(f"interval must be one of {INTERVALS}")
-    
-#     # 残すデータのインデックス
-#     if interval in MINUTES:
-#         idx = pd.Series(df.index).apply(
-#                 lambda x: x.minute % MINUTES[interval] == 0 and x.second == 0)
-#     elif interval in HOURS:
-#         idx = pd.Series(df.index).apply(
-#                 lambda x: x.hour % HOURS[interval] == 0 and x.minute == 0 and x.second == 0)
-#     elif interval in DAYS:
-#         idx = pd.Series(df.index).apply(
-#                 lambda x: x.day % DAYS[interval] == 0 and x.hour == 0 and x.minute == 0 and x.second == 0)
-    
-#     return df.loc[idx.values].copy()
-    
-# def get_first_timestamp(ts: pd.Timestamp, interval: str) -> pd.Timestamp:
-#     if interval not in ['1d', '15m', '1m']:
-#         raise ValueError("interval must be one of ['1d', '15m', '1m']")
-    
-#     table = {
-#         '1d': pd.Timestamp(ts.year, ts.month, ts.day),
-#         '15m': pd.Timestamp(ts.year, ts.month, ts.day, ts.hour, 15 * (ts.minute // 15)),
-#         '1m': pd.Timestamp(ts.year, ts.month, ts.day, ts.hour, ts.minute),
-#     }
-    
-#     return table[interval]
-
-# def normalized_timeindex(start: Union[int, pd.Timestamp],
-#                          end: Union[int, pd.Timestamp],
-#                          delta: [int, pd.Timedelta]) -> pd.Series:
-#     if start >= end:
-#         raise ValueError("end must be larger than start")
-    
-#     return pd.Series(np.arange(start, end, delta))
 
 # def select(df: pd.DataFrame,
 #            year: Optional[int]=None,
@@ -218,86 +211,86 @@ def period_to_seconds(self, period):
     
 #     return {'ascending': ascending}
 
-# def this_year_first(t: pd.Timestamp):
-#     return datetime(t.year, 1, 1)
+def this_year_first(t: pd.Timestamp):
+    return datetime(t.year, 1, 1)
 
-# def next_year_first(t: pd.Timestamp):
-#     return datetime(t.year+1, 1, 1)
+def next_year_first(t: pd.Timestamp):
+    return datetime(t.year+1, 1, 1)
 
-# def count_years(begin: pd.Timestamp, end: pd.Timestamp):
-#     return end.year - begin.year
+def count_years(begin: pd.Timestamp, end: pd.Timestamp):
+    return end.year - begin.year
 
-# def add_years(t, dy):
-#     return datetime(t.year+dy, t.month, t.day)
+def add_years(t, dy):
+    return datetime(t.year+dy, t.month, t.day)
 
-# def year_sections(begin, end):
-#     if begin >= end:
-#         raise ValueError("begin must be before than end")
+def year_sections(begin, end):
+    if begin >= end:
+        raise ValueError("begin must be before than end")
     
-#     b = this_year_first(begin)
-#     e = next_year_first(end)
+    b = this_year_first(begin)
+    e = next_year_first(end)
     
-#     for i in range(count_years(b, e)):
-#         x = add_years(b, i)
-#         y = add_years(b, i+1)
-#         yield (x, y)
+    for i in range(count_years(b, e)):
+        x = add_years(b, i)
+        y = add_years(b, i+1)
+        yield (x, y)
 
-# def this_month_first(t):
-#     return datetime(t.year, t.month, 1)
+def this_month_first(t):
+    return datetime(t.year, t.month, 1)
     
-# def next_month_first(t):
-#     if t.month == 12:
-#         return datetime(t.year+1, 1, 1)
-#     return datetime(t.year, t.month+1, 1)
+def next_month_first(t):
+    if t.month == 12:
+        return datetime(t.year+1, 1, 1)
+    return datetime(t.year, t.month+1, 1)
 
-# def count_months(begin, end):
-#     years = end.year - begin.year
-#     months = end.month - begin.month
+def count_months(begin, end):
+    years = end.year - begin.year
+    months = end.month - begin.month
     
-#     return years * 12 + months
+    return years * 12 + months
 
-# def add_months(t, dm):
-#     year = t.year + (dm // 12)
-#     month = t.month + (dm % 12)
+def add_months(t, dm):
+    year = t.year + (dm // 12)
+    month = t.month + (dm % 12)
     
-#     if month > 12:
-#         year += 1
-#         month -= 12
+    if month > 12:
+        year += 1
+        month -= 12
     
-#     return datetime(year, month, t.day)
+    return datetime(year, month, t.day)
 
-# def month_sections(begin, end):
-#     if begin >= end:
-#         raise ValueError("begin must be before than end")
+def month_sections(begin, end):
+    if begin >= end:
+        raise ValueError("begin must be before than end")
     
-#     b = this_month_first(begin)
-#     e = next_month_first(end)
+    b = this_month_first(begin)
+    e = next_month_first(end)
     
-#     for i in range(count_months(b, e)):
-#         x = add_months(b, i)
-#         y = add_months(b, i+1)
-#         yield (x, y)
+    for i in range(count_months(b, e)):
+        x = add_months(b, i)
+        y = add_months(b, i+1)
+        yield (x, y)
         
-# def this_day_first(t):
-#     return datetime(t.year, t.month, t.day)
+def this_day_first(t):
+    return datetime(t.year, t.month, t.day)
 
-# def next_day_first(t):
-#     return datetime(t.year, t.month, t.day) + timedelta(days=1)
+def next_day_first(t):
+    return datetime(t.year, t.month, t.day) + timedelta(days=1)
 
-# def count_days(begin, end):
-#     return (end - begin).days
+def count_days(begin, end):
+    return (end - begin).days
 
-# def add_days(t, dd):
-#     return t + timedelta(days=dd)
+def add_days(t, dd):
+    return t + timedelta(days=dd)
 
-# def day_sections(begin, end):
-#     if begin >= end:
-#         raise ValueError("begin must be before than end")
+def day_sections(begin, end):
+    if begin >= end:
+        raise ValueError("begin must be before than end")
     
-#     b = this_day_first(begin)
-#     e = next_day_first(end)
+    b = this_day_first(begin)
+    e = next_day_first(end)
     
-#     for i in range(count_days(b, e)):
-#         x = add_days(b, i)
-#         y = add_days(b, i+1)
-#         yield (x, y)
+    for i in range(count_days(b, e)):
+        x = add_days(b, i)
+        y = add_days(b, i+1)
+        yield (x, y)

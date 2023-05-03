@@ -13,26 +13,80 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union, Iter
 
 # from .analysis import log10
 from .api import CodePair, CRangePeriod, ChartAPI
-from .core import type_checked, is_instance_list, is_instance_dict
+from .core import type_checked, type_checked_copy, is_instance_list, is_instance_dict
+from .period import Period
 # from .timeseries import merge, down_sampling, select, \
 #                         normalized_timeindex, get_first_timestamp, \
 #                         to_timedelta
 
-from .utils import standardize
+from .timeseries import year_sections, month_sections, day_sections
+from .utils import focus, standardize, \
+    default_timestamp_filter, default_save_fstring, default_save_iterator, \
+    default_glob_function, default_save_function, \
+    default_restore_function, default_merge_function
 
-class Board:
+from .safeattr import immutable, protected, SafeAttrABC
+
+class Board(SafeAttrABC):
+    default_glob_function = default_glob_function
+    default_save_function = default_save_function
+    default_restore_function = default_restore_function
+    default_merge_function = default_merge_function
+
     def __init__(self,
+                 name: Union[str, CRangePeriod],
                  api: Type[ChartAPI],
-                 code_pair: CodePair,
-                 crange_period: CRangePeriod,
-                 df: pd.DataFrame=None,
-                 interval: Optional[datetime]=None):
-        self.code_pair = type_checked(code_pair, CodePair).copy()
-        self.crange_period = type_checked(crange_period, CRangePeriod).copy()
-        self.api = type_checked(api, ChartAPI)
+                 code_pair: Union[str, CodePair],
+                 crange_period: Union[str, CRangePeriod],
+                 data_dir: Optional[Union[str, Path]]=None,
+                 df: Optional[pd.DataFrame]=None,
+                 interval: Optional[Union[timedelta, Period]]=None,
+                 timestamp_filter: Optional[Callable[[datetime], bool]]=None,
+                 save_fstring: Optional[str]=None,
+                 save_iterator: Optional[Callable[[datetime, datetime], Iterable[Tuple[datetime, datetime]]]]=None,
+                 glob_function=default_glob_function,
+                 save_function=default_save_function,
+                 restore_function=default_restore_function,
+                 merge_function=default_merge_function,
+                 ):
+        self.name = immutable(name, (str, CRangePeriod))
+        self.api = immutable(api, ChartAPI)
 
-        self.df = df if df is not None else self.api.empty
-        self._interval = interval
+        self.code_pair = immutable(code_pair, (str, CodePair), copy=True)
+        self.crange_period = immutable(crange_period, (str, CRangePeriod), copy=True)
+        
+        self.data_dir = immutable(data_dir, Path, f=Path, optional=True)
+
+        if df is None:
+            df = self.api.empty
+
+        self.df = protected(df, pd.DataFrame, optional=True, copy=True)
+        self.interval = protected(interval, (timedelta, Period), optional=True, copy=True)
+
+        self.glob_function = immutable(glob_function)
+        self.save_function = immutable(save_function)
+        self.restore_function = immutable(restore_function)
+        self.merge_function = immutable(merge_function)
+
+        if self.period not in { Period('1d'), Period('15m'), Period('1m') }:
+            if timestamp_filter is None:
+                raise KeyError(f"{self.period} not in table.")
+            if save_fstring is None:
+                raise KeyError(f"{self.period} not in table.")
+            if save_iterator is None:
+                raise KeyError(f"{self.period} not in table.")
+
+        self.timestamp_filter = immutable(
+            default_timestamp_filter(self.period)
+        )
+
+        self.save_fstring = immutable(
+            default_save_fstring(self.period)
+        )
+
+        self._save_iterator = immutable(
+            default_save_iterator(self.period)
+        )
     
     def __repr__(self):
         return self.dumps()
@@ -40,7 +94,11 @@ class Board:
     def dump(self, f, indent=2, nest=1):
         tab = " " * indent * nest
         last_tab = " " * (indent * (nest - 1))
-        f.write(f"Board(api={self.api},\n")
+        if isinstance(self.name, str):
+            f.write(f"Board(name='{self.name}',\n")
+        else:
+            f.write(f"Board(name={self.name},\n")
+        f.write(f"{tab}api={self.api},\n")
         f.write(f"{tab}code_pair={self.code_pair},\n")
         f.write(f"{tab}crange_period={self.crange_period},\n")
         f.write(f"{tab}interval={self.interval},\n")
@@ -62,16 +120,14 @@ class Board:
 #                      api=api,
 #                      df=self.df.copy(),
 #                      interval=self.interval)
-
-    @property
-    def interval(self):
-        return self._interval
     
-    @interval.setter
-    def interval(self, dt):
-        if not isinstance(dt, timedelta):
-            raise TypeError("dt must be instance of timedelta")
-        self._interval = dt
+    @property
+    def crange(self):
+        return self.crange_period.crange
+    
+    @property
+    def period(self):
+        return self.crange_period.period
 
     @property
     def first_updated(self):
@@ -88,8 +144,7 @@ class Board:
         return self.df.index[-1]
 
     def should_be_updated(self, interval=None):
-        if interval is None:
-            interval = self.interval
+        interval = self.arg_interval(interval)
 
         if interval is None:
             return True
@@ -103,17 +158,55 @@ class Board:
         return False
     
     def flush(self):
-        self.df = self.api.empty
+        self._df = self.api.empty
         return self.df
-    
-    def save(self):
-        pass
 
-    def read(self):
-        pass
+    def save(self, dir_path=None, save_function=None):
+        dir_path = self.arg_data_dir(dir_path)
+        save_function = self.arg_save_function(save_function)
+
+        return save_function(
+            df=self.df,
+            dir_path=dir_path,
+            sections=self.save_iterator,
+            format_string=self.save_fstring,
+            timestamp_filter=self.timestamp_filter
+        )
+
+    def read(self, dir_path=None, t=None, save_fstring=None, glob_function=None, restore_function=None):
+        dir_path = self.arg_data_dir(dir_path)
+        save_fstring = self.arg_save_fstring(save_fstring)
+        glob_function = self.arg_glob_function(glob_function)
+        restore_function = self.arg_restore_function(restore_function)
+
+        read_dir = Path(dir_path)
+        if not read_dir.exists():
+            raise FileNotFoundError(f"Directory not found '{read_dir}'")
+
+        paths = glob_function(read_dir)
+        if len(paths) == 0:
+            raise FileNotFoundError(f"No file to read in '{read_dir}'")
+
+        paths = focus(paths, t, fstring=save_fstring)
+        if len(paths) == 0:
+            raise FileNotFoundError(f"No files remained after applying time filter")
+
+        df = standardize(restore_function(paths))
+        
+        return focus(df, t)
     
-    def load(self):
-        pass
+    def load(self, dir_path, t=None, save_fstring=None, glob_function=None, restore_function=None):
+        df = self.read(
+            dir_path=dir_path,
+            t=t,
+            save_fstring=save_fstring,
+            glob_function=glob_function,
+            restore_function=restore_function
+        )
+
+        self._df = df
+
+        return df
 
     def download(self, t=None):
         df = self.api.download(code_pair=self.code_pair,
@@ -125,20 +218,12 @@ class Board:
         if (not force) and (not self.should_be_updated()):
             return None
 
-        self.df = self.download(t)
-        return self.df
+        df = self.download(t)
+        self._df = default_merge_function(self.df, df)
+        return self._df
 
     def sync(self):
         pass
-    
-#     def update(self, t=None, df: pd.DataFrame=None, merge_function=None):
-#         if merge_function is None:
-#             merge_function = default_merge_function
-
-#         if df is None:
-#             df = self.download(t=t)
-#         self.df = merge_function(self.df, df)
-#         return self
 
 #     def sync(self, dir_path, t=None, update=True, interval=None, glob_function=None, restore_function=None, merge_function=None):
 #         if glob_function is None:
@@ -164,74 +249,6 @@ class Board:
 
 #         return self
 
-#     def read(self, dir_path, t=None, glob_function=None, restore_function=None):
-#         if glob_function is None:
-#             glob_function = default_glob_function
-#         if restore_function is None:
-#             restore_function = default_restore_function
-
-#         key = self.crange_interval
-#         fmt = self.api.default_save_fstring[key]
-
-#         if t is None:
-#             f = lambda x: True
-#             g = lambda idx: idx
-#         elif isinstance(t, datetime):
-#             f = lambda x: datetime.strptime(x.name, fmt) <= t
-#             g = lambda idx: idx
-#         elif is_instance_list(t, datetime, 2):
-#             if t[1] is not None:
-#                 f = lambda x: t[0] <= datetime.strptime(x.name, fmt)
-#             else:
-#                 f = lambda x: t[0] <= datetime.strptime(x.name, fmt) <= t[1]
-#             g = lambda idx: list(filter(lambda x: x >= 0, [idx[0] - 1] + list(idx)))
-#         else:
-#             raise TypeError("t must be instance of datetime or Tuple[datetime, datetime]")
-
-#         load_dir = Path(dir_path)
-#         if not load_dir.exists():
-#             raise FileNotFoundError(f"Directory not found '{load_dir}'")
-
-#         paths = glob_function(load_dir)
-#         if len(paths) == 0:
-#             raise FileNotFoundError(f"No file to read in '{load_dir}'")
-
-#         idx = g([ i for i, p in enumerate(paths) if f(p) ])
-
-#         paths = [ paths[i] for i in idx ]
-#         if len(paths) == 0:
-#             raise FileNotFoundError(f"No files remained after applying time filter")
-
-#         df = standardize(restore_function(paths))
-
-#         if isinstance(t, datetime):
-#             df = df[df.index <= t].copy()
-#         elif is_instance_list(t, datetime, 2):
-#             if t[1] is None:
-#                 df = df[df.index >= t[0]].copy()
-#             else:
-#                 df = df[(df.index >= t[0]) & (df.index <= t[1])].copy()
-        
-#         return df
-
-#     def load(self, dir_path, t=None, glob_function=None, restore_function=None):
-#         self.df = self.read(dir_path, t, glob_function, restore_function)
-#         return self
-
-#     def save(self, dir_path, save_function=None):
-#         if save_function is None:
-#             save_function = default_save_function
- 
-#         key = self.crange_interval
-
-#         return save_function(
-#                     df=self.df,
-#                     dir_path=dir_path,
-#                     sections=self.api.default_save_iterator[key],
-#                     format_string=self.api.default_save_fstring[key],
-#                     timestamp_filter=self.api.default_timestamp_filter[key]
-#                     )
-
 #     # def down_sampling(self):
 #     #     pass
     
@@ -248,17 +265,63 @@ class Board:
 #     def __getitem__(self, key):
 #         return log10(self.dfs[key])
 
-class Chart:
+class Chart(SafeAttrABC):
+    def _make_crange_period(self,
+            crange_period: Union[str, CRangePeriod, EllipsisType],
+            name: Optional[Union[str, CRangePeriod]]=None):
+        if isinstance(name, CRangePeriod):
+            if crange_period is not ...:
+                raise ValueError(f"crange_period must be ... {EllipsisType} when name is instance of {CRangePeriod}.")
+        if name is not None:
+            if not isinstance(name, (str, CRangePeriod)):
+                raise TypeError(f"name must be instance of {str} or {CRangePeriod} but actual type {type(name)}.")
+            if crange_period is ...:
+                crange_period = name
+            else:
+                # name is ignored
+                pass
+
+        if isinstance(crange_period, str):
+            return self.api.crange_period_from_string(crange_period)
+        elif isinstance(crange_period, CRangePeriod):
+            return crange_period.copy()
+
+        raise TypeError(f"crange_period must be instance of {str} or {CRangePeriod} but actual type {(type(crange_period))}.")
+
+    def _make_crange_period_list(self,
+            crange_period: Union[str, CRangePeriod,
+                                Iterable[Union[str, CRangePeriod]]]):
+        xs = crange_period
+        if isinstance(xs, (str, CRangePeriod)):
+            return [ self._make_crange_period(xs) ]
+        elif is_instance_list(xs, (str, CRangePeriod)):
+            return [ self._make_crange_period(x) for x in xs ]
+        raise TypeError(f"crange_period must be instance of {str}, {CRangePeriod}, {Iterable[Union[str, CRangePeriod]]}.")
+
+    def _make_crange_period_dict(self,
+            crange_period: Union[str, CRangePeriod,
+                                Iterable[Union[str, CRangePeriod]],
+                                Mapping[str, Union[str, CRangePeriod]]]):
+        xs = crange_period
+        if isinstance(xs, (str, CRangePeriod)):
+            return { xs: self._make_crange_period(xs) }
+        elif is_instance_dict(xs, kt=(str, CRangePeriod), vt=(str, CRangePeriod, EllipsisType)):
+            return { name: self._make_crange_period(crange_period, name=name) for name, crange_period in xs.items() }
+        elif is_instance_list(crange_period, (str, CRangePeriod)):
+            return { x: self._make_crange_period(x) for x in xs }
+        raise TypeError(f"crange_period must be instance of {str}, {CRangePeriod}, {Iterable[Union[str, CRangePeriod]]}, or {Mapping[str, Union[str, CRangePeriod, EllipsisType]]}.")
+
     def __init__(self,
                  api: Type[ChartAPI],
                  code_pair: CodePair,
                  data_dir: Union[str, Path],
                  crange_period: Union[CRangePeriod, Iterable[CRangePeriod]]=None
                 ):
-        self.api = type_checked(api, ChartAPI)
+        self.api = immutable(api, ChartAPI)
         self.code_pair = self._to_code_pair(code_pair)
         self.data_dir = Path(data_dir)
         self.board = {}
+
         if crange_period is None:
             crange_period = [ self.api.default_crange_period ]
         for name, cp in self._make_crange_period_dict(crange_period).items():
@@ -325,51 +388,6 @@ class Chart:
         elif isinstance(code_pair, CodePair):
             return code_pair.copy()
         raise TypeError(f"code_pair must be instance of {str} or {CodePair}")
-
-    def _make_crange_period(self,
-            crange_period: Union[str, CRangePeriod, EllipsisType],
-            name: Optional[Union[str, CRangePeriod]]=None):
-        if isinstance(name, CRangePeriod):
-            if crange_period is not ...:
-                raise ValueError(f"crange_period must be ... {EllipsisType} when name is instance of {CRangePeriod}.")
-        if name is not None:
-            if not isinstance(name, (str, CRangePeriod)):
-                raise TypeError(f"name must be instance of {str} or {CRangePeriod} but actual type {type(name)}.")
-            if crange_period is ...:
-                crange_period = name
-            else:
-                # name is ignored
-                pass
-
-        if isinstance(crange_period, str):
-            return self.api.crange_period_from_string(crange_period)
-        elif isinstance(crange_period, CRangePeriod):
-            return crange_period.copy()
-
-        raise TypeError(f"crange_period must be instance of {str} or {CRangePeriod} but actual type {(type(crange_period))}.")
-
-    def _make_crange_period_list(self,
-            crange_period: Union[str, CRangePeriod,
-                                Iterable[Union[str, CRangePeriod]]]):
-        xs = crange_period
-        if isinstance(xs, (str, CRangePeriod)):
-            return [ self._make_crange_period(xs) ]
-        elif is_instance_list(xs, (str, CRangePeriod)):
-            return [ self._make_crange_period(x) for x in xs ]
-        raise TypeError(f"crange_period must be instance of {str}, {CRangePeriod}, {Iterable[Union[str, CRangePeriod]]}.")
-
-    def _make_crange_period_dict(self,
-            crange_period: Union[str, CRangePeriod,
-                                Iterable[Union[str, CRangePeriod]],
-                                Mapping[str, Union[str, CRangePeriod]]]):
-        xs = crange_period
-        if isinstance(xs, (str, CRangePeriod)):
-            return { xs: self._make_crange_period(xs) }
-        elif is_instance_dict(xs, kt=(str, CRangePeriod), vt=(str, CRangePeriod, EllipsisType)):
-            return { name: self._make_crange_period(crange_period, name=name) for name, crange_period in xs.items() }
-        elif is_instance_list(crange_period, (str, CRangePeriod)):
-            return { x: self._make_crange_period(x) for x in xs }
-        raise TypeError(f"crange_period must be instance of {str}, {CRangePeriod}, {Iterable[Union[str, CRangePeriod]]}, or {Mapping[str, Union[str, CRangePeriod, EllipsisType]]}.")
         
     def add(self, crange_period: Union[str, CRangePeriod], name: Optional[str]=None, api=None, interval=None):
         api = api if api is not None else self.api
@@ -384,6 +402,7 @@ class Chart:
         
         self.board[name] = \
             Board(
+                name=name,
                 api=api,
                 code_pair=self.code_pair,
                 crange_period=crange_period,
@@ -408,24 +427,49 @@ class Chart:
 #     @property
 #     def dfs(self):
 #         return { k: v.df for k, v in self.board.items() }
-        
     
-#     def flush(self, crange_interval: Union[str, Iterable[str]]=None):
-#         for key in self._to_crange_interval_list(crange_interval):
-#             board = self.board[key]
-#             board.flush()
+    def flush(self, crange_period: Union[str, Iterable[str]]=None):
+        for key in self._to_crange_interval_list(crange_period):
+            board = self.board[key]
+            board.flush()
 
-#         return self
+        return self
 
-    def read(self):
-        pass
+    def save(self, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
+
+        if crange_period is None:
+            crange_period = list(self.board.keys())
+        else:
+            crange_period = self._make_crange_period_list(crange_period)
+
+        for key in crange_period:
+            board = self.board[key]
+            dir_path = data_dir / board.code_pair.short / board.crange_period.short
+            board.save(dir_path)
+        
+        return self
+
+    def read(self, crange_period: Union[str, Iterable[str]]=None, data_dir=None, t=None):
+        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
+
+        if crange_period is None:
+            crange_period = list(self.board.keys())
+        else:
+            crange_period = self._make_crange_period_list(crange_period)
+        
+        ret = {}
+        for key in crange_period:
+            board = self.board[key]
+            dir_path = data_dir / board.code_pair.short / board.crange_period.short
+            ret[board.name] = board.read(dir_path)
+
+        return ret
 
     def load(self):
         pass
 
-    def download(self, crange_period: Union[str, Iterable[str]]=None, t=None, data_dir=None):
-        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
-        
+    def download(self, crange_period: Union[str, Iterable[str]]=None, t=None):
         if crange_period is None:
             crange_period = list(self.board.keys())
         else:
@@ -517,6 +561,14 @@ class ChartDummyAPI(ChartAPI):
     @property
     def default_crange_period(self) -> str:
         return CRangePeriod('max', '15m')
+
+    @property
+    def default_crange_periods(self):
+        return [
+            CRangePeriod('max', '1h'),
+            CRangePeriod('max', '15m'),
+            CRangePeriod('max', '1m'),
+        ]
     
     def is_valid_crange_period(self, crange_period: str) -> bool:
         table = {
@@ -563,6 +615,10 @@ class ChartEmulatorAPI(ChartAPI):
 
     def is_valid_crange_period(self, crange_period: str) -> bool:
         return self._api.is_valid_crange_period(crange_period)
+
+    @property
+    def code_pairs(self):
+        return self._api.code_pairs
 
     @property
     def default_crange_period(self):
@@ -622,3 +678,26 @@ class ChartEmulatorAPI(ChartAPI):
 #             TypeError(f"")
             
 #         return df.copy()
+
+    def download(self, code_pair, crange_period=None, t=None, as_dataframe=True):
+        """
+        t ... ignored if as_dataframe is False
+        """
+        if code_pair not in self.code_pairs:
+            raise ValueError(f"ticker '{code_pair}' not in {self.code_pairs}")
+
+        code_pair = self.make_code_pair_string(code_pair)
+        # if crange not in self.cranges:
+        #     raise ValueError(f"crange '{crange}' not in {self.cranges}")
+        # if period not in self.periods:
+        #     raise ValueError(f"interval '{period}' not in {self.periods}")
+
+        if crange_period is None:
+            crange_period = self.default_crange_period
+
+        print(self._source_dir)
+
+
+        #df = 
+
+        #return focus(df, t)

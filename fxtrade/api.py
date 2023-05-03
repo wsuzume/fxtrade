@@ -44,11 +44,23 @@ class ChartAPI(ABC):
         return CRangePeriod(crange, period)
 
     @abstractmethod
-    def __init__(self):
-        pass
+    def __init__(self,
+                 crange_periods,
+                 timestamp_filter,
+                 save_fstring,
+                 save_iterator):
+        self._crange_periods = crange_periods
+        self._timestamp_filter = timestamp_filter
+        self._save_fstring = save_fstring
+        self._save_iterator = save_iterator
 
     @abstractmethod
     def freeze(self):
+        pass
+
+    @property
+    @abstractmethod
+    def empty(self) -> pd.DataFrame:
         pass
 
 #     @property
@@ -80,30 +92,26 @@ class ChartAPI(ABC):
     def is_valid_crange_period(self, crange_period: str) -> bool:
         pass
 
-#     @property
-#     @abstractmethod
-#     def default_crange_periods(self) -> List[str]:
-#         pass
-    
-#     @property
-#     @abstractmethod
-#     def default_timestamp_filter(self) -> Callable:
-#         pass
-    
-#     @property
-#     @abstractmethod
-#     def default_save_fstring(self) -> str:
-#         pass
-    
-#     @property
-#     @abstractmethod
-#     def default_save_iterator(self) -> Callable:
-#         pass
-    
     @property
     @abstractmethod
-    def empty(self) -> pd.DataFrame:
+    def default_crange_periods(self) -> List[str]:
         pass
+    
+    # @property
+    # @abstractmethod
+    # def default_timestamp_filter(self) -> Callable:
+    #     pass
+    
+    # @property
+    # @abstractmethod
+    # def default_save_fstring(self) -> str:
+    #     pass
+    
+    # @property
+    # @abstractmethod
+    # def default_save_iterator(self) -> Callable:
+    #     pass
+    
 
 #     @abstractmethod
 #     def download(self, code_pair, crange, period, t, as_dataframe: bool) -> pd.DataFrame:

@@ -1,9 +1,22 @@
+from copy import copy, deepcopy
 from typing import Any, Callable, Iterable, Mapping
 
-def type_checked(x: Any, t: Any):
+def type_checked(x: Any, t: Any, optional: bool=False):
+    if x is None and optional:
+        return x
+
     if not isinstance(x, t):
         raise TypeError(f"x must be instance of {t} but actual type {type(x)}.")
     return x
+
+def type_checked_copy(x: Any, t: Any, optional: bool=False, deep: bool=False):
+    copy_function = copy if not deep else deepcopy
+
+    x = type_checked(x, t, optional)
+
+    if hasattr(x, 'copy'):
+        return x.copy()
+    return copy_function(x)
 
 def is_filtered_list(xs: Any, f: Callable[[Any], bool], n: int=None):
     if isinstance(xs, Mapping):
