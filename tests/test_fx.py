@@ -1,5 +1,7 @@
 import pytest
 
+from fxtrade.stock import Stock
+from fxtrade.wallet import Wallet
 from fxtrade.chart import ChartDummyAPI
 from fxtrade.trader import TraderDummyAPI, Trader
 from fxtrade.fx import FX
@@ -14,7 +16,11 @@ def test_FX():
             trader_api=trader_api,
             data_dir='../data')
     
+    assert fx.wallet == Wallet()
+
     fx.generate_client('BTC', crange_period=[])
+
+    assert fx.wallet == Wallet([Stock('JPY', 0), Stock('BTC', 0)])
 
     assert fx.dumps() == \
         "FX(name='trader1',\n" + \

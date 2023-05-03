@@ -1,20 +1,9 @@
 import pytest
 
-from fxtrade.api import CodePair, CrangePeriod
+from fxtrade.api import CRangePeriod
 
-def test_CodePair():
-    codepair = CodePair('BTC', 'JPY')
-    
-    assert codepair.base == 'BTC'
-    assert codepair.quote == 'JPY'
+def test_CRangePeriod():
+    crange_period = CRangePeriod('max', '15m')
 
-    codepair2 = codepair.copy()
-
-    assert codepair2.base == 'BTC'
-    assert codepair2.quote == 'JPY'
-
-def test_CrangePeriod():
-    crange_period = CrangePeriod('max', '15m')
-
-    assert crange_period == CrangePeriod('max', '15m')
-    assert crange_period != CrangePeriod('max', '1m')
+    assert crange_period == CRangePeriod('max', '15m')
+    assert crange_period != CRangePeriod('max', '1m')
