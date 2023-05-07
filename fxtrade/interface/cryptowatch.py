@@ -7,9 +7,8 @@ from datetime import datetime
 from typing import Union, Optional
 
 from ..api import CodePair, CRangePeriod, ChartAPI
+from ..timeseries import year_sections, month_sections, day_sections
 from ..utils import focus
-
-# from ..timeseries import year_sections, month_sections, day_sections
 
 def get_chart(api_key, market, code_pair, chart_range, period):
     headers = {
@@ -53,15 +52,23 @@ class CryptowatchAPI(ChartAPI):
             return f"{base.base.lower()}{base.quote.lower()}"
         raise TypeError("unrecognized type arguments")
         
-    def __init__(self, api_key, custom_crange_periods=[]):
+    def __init__(self,
+                 api_key,
+                 crange_periods=[],
+                 timestamp_filter=None,
+                 save_fstring=None,
+                 save_iterator=None):
         self.api_key = api_key
-        self._custom_crange_periods = [ crange_period.copy() for crange_period in custom_crange_periods ]
+        self._crange_periods = [ crange_period.copy() for crange_period in crange_periods ]
+        self._timestamp_filter = timestamp_filter
+        self._save_fstring = save_fstring
+        self._save_iterator = save_iterator
     
     def __repr__(self):
         return f"CryptowatchAPI(api_key='{self.api_key[:4]}...')"
 
     def freeze(self):
-        return CryptowatchAPI(api_key='[frozen]', custom_crange_periods=self._custom_crange_periods)
+        return CryptowatchAPI(api_key='[frozen]', crange_periods=self._crange_periods)
 
     @property
     def code_pairs(self):
@@ -74,14 +81,6 @@ class CryptowatchAPI(ChartAPI):
     @property
     def periods(self):
         return ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '3d', '1w']
-
-#     @property
-#     def max_cranges(self):
-#         return {
-#             '1d': 'max',
-#             '15m': 'max',
-#             '1m': 'max',
-#         }
     
     @property
     def default_crange_period(self):
@@ -97,44 +96,10 @@ class CryptowatchAPI(ChartAPI):
 
     @property
     def crange_periods(self):
-        return sorted(list(set(self.default_crange_periods + self._custom_crange_periods)))
+        return sorted(list(set(self.default_crange_periods + self._crange_periods)))
 
     def is_valid_crange_period(self, crange_period):
         return crange_period in self.crange_periods
-
-    # @property
-    # def default_crange_periods(self):
-    #     return {
-    #         'max-1d': ('10y', '1d'),
-    #         'max-15m': ('1mo', '15m'),
-    #         'max-1m': ('5d', '1m'),
-    #     }
-    
-#     @property
-#     def default_timestamp_filter(self):
-#         return {
-#             'max-1d': lambda x: (x.hour == 0) and (x.minute == 0) \
-#                                 and (x.second == 0) and (x.nanosecond == 0),
-#             'max-15m': lambda x: (x.minute % 15 == 0) \
-#                                 and (x.second == 0) and (x.nanosecond == 0),
-#             'max-1m': lambda x: (x.second == 0) and (x.nanosecond == 0),
-#         }
-    
-#     @property
-#     def default_save_fstring(self):
-#         return {
-#             'max-1d': '%Y.csv',
-#             'max-15m': '%Y-%m.csv',
-#             'max-1m': '%Y-%m-%d.csv',
-#         }
-    
-#     @property
-#     def default_save_iterator(self):
-#         return {
-#             'max-1d': year_sections,
-#             'max-15m': month_sections,
-#             'max-1m': day_sections,
-#         }
     
     @property
     def empty(self):
@@ -148,13 +113,14 @@ class CryptowatchAPI(ChartAPI):
             raise ValueError(f"ticker '{code_pair}' not in {self.code_pairs}")
 
         code_pair = self.make_code_pair_string(code_pair)
-        # if crange not in self.cranges:
-        #     raise ValueError(f"crange '{crange}' not in {self.cranges}")
-        # if period not in self.periods:
-        #     raise ValueError(f"interval '{period}' not in {self.periods}")
 
         if crange_period is None:
             crange_period = self.default_crange_period
+
+        if str(crange_period.crange) not in self.cranges:
+            raise ValueError(f"crange '{crange_period.crange}' not in {self.cranges}")
+        if str(crange_period.period) not in self.periods:
+            raise ValueError(f"interval '{crange_period.period}' not in {self.periods}")
 
         response = get_chart(
             api_key=self.api_key,

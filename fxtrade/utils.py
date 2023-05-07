@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Union, Iterable, List, Tuple
 
@@ -28,11 +28,21 @@ def standardize(df: pd.DataFrame):
         columns = ohlcv_col
     else:
         columns = ohlc_col
-    
-    if len(df) < 2:
-        raise ValueError(f"df must have at least 2 rows.")
 
     return df[columns].sort_index()
+
+def normalize(df: pd.DataFrame, dt: timedelta):
+    """
+    インデックスを正しい刻みにする
+    """
+    df = type_checked(df, pd.DataFrame)
+
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise TypeError(f"df.index must be {pd.DatetimeIndex}.")
+
+    # TODO
+
+    return df
 
 def focus(x, t, fstring=None):
     def _focus(s, t):
@@ -73,7 +83,7 @@ def focus(x, t, fstring=None):
     elif isinstance(x, Path):
         return focus(x.name, t, fstring=fstring)
 
-    elif is_instance_list(x, (str, Path)):
+    elif is_instance_list(x, (datetime, str, Path)):
         return [ v for v in x if focus(v, t, fstring=fstring) ]
     
     raise TypeError()
@@ -149,9 +159,9 @@ def merge(df_prev: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     idx_new = (idx - intersec) | idx_new_inter
     
     df = pd.concat([
-                df_prev.loc[sorted(list(idx_old))],
-                df.loc[sorted(list(idx_new))],
-         ], axis=0).sort_index()
+        df_prev.loc[sorted(list(idx_old))],
+        df.loc[sorted(list(idx_new))],
+    ], axis=0).sort_index()
     
     return df
 
@@ -178,8 +188,8 @@ def default_restore_function(paths: Iterable[Union[str, Path]]) -> pd.DataFrame:
 def default_save_function(
                 df: pd.DataFrame,
                 dir_path: Union[str, Path],
-                sections: Callable[[datetime, datetime], Iterable[Tuple[datetime, datetime]]],
-                format_string: str,
+                save_iterator: Callable[[datetime, datetime], Iterable[Tuple[datetime, datetime]]],
+                save_fstring: str,
                 timestamp_filter: Callable[[datetime], bool]=None
                 ) -> Path:
     save_dir = Path(dir_path)
@@ -191,8 +201,8 @@ def default_save_function(
     df = df.sort_index()
 
     # 期間ごとに小分けにしてイテレート
-    for begin, end in sections(df.index[0], df.index[-1]):
-        save_name = begin.strftime(format_string)
+    for begin, end in save_iterator(df.index[0], df.index[-1]):
+        save_name = begin.strftime(save_fstring)
         path = save_dir / save_name
         
         # 小分けにしたデータフレーム
@@ -205,9 +215,7 @@ def default_save_function(
         
         # 保存するデータを選択する
         if timestamp_filter is not None:
-            save_idx = pd.Series(df_part.index).apply(
-                            timestamp_filter
-                        )
+            save_idx = pd.Series(df_part.index).apply(timestamp_filter)
             df_part = df_part.loc[save_idx.values]
         
         # 保存する

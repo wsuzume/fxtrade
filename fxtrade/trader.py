@@ -5,8 +5,6 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Iterable, Optional, Type, Union
 
-from . import dirmap
-
 from .trade import History
 from .api import CodePair, TraderAPI
 from .chart import Chart
@@ -84,15 +82,14 @@ class Trader:
             return Path(path)
         return self.data_dir / 'wallet.csv'
 
-    def save_wallet(self, path=None, t=None, append: bool=False, verbose: bool=False):
+    def save_wallet(self, path=None, t=None, append: bool=False, verbose: bool=True):
         path = self.get_wallet_path(path)
 
-        _, msg = dirmap.ensure(path.parent, verbose=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         self.wallet.to_csv(path, t=t, append=append)
-        
-        if verbose:
-            return path, msg
 
+        if verbose:
+            return path, 'msg'
         return path
 
     def read_wallet(self, path=None, return_t: bool=False, verbose: bool=False):

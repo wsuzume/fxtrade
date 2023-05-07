@@ -15,9 +15,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union, Iter
 from .api import CodePair, CRangePeriod, ChartAPI
 from .core import type_checked, type_checked_copy, is_instance_list, is_instance_dict
 from .period import Period
-# from .timeseries import merge, down_sampling, select, \
-#                         normalized_timeindex, get_first_timestamp, \
-#                         to_timedelta
 
 from .timeseries import year_sections, month_sections, day_sections
 from .utils import focus, standardize, \
@@ -34,10 +31,10 @@ class Board(SafeAttrABC):
     default_merge_function = default_merge_function
 
     def __init__(self,
-                 name: Union[str, CRangePeriod],
-                 api: Type[ChartAPI],
                  code_pair: Union[str, CodePair],
                  crange_period: Union[str, CRangePeriod],
+                 name: Union[str, CRangePeriod]=None,
+                 api: Type[ChartAPI]=None,
                  data_dir: Optional[Union[str, Path]]=None,
                  df: Optional[pd.DataFrame]=None,
                  interval: Optional[Union[timedelta, Period]]=None,
@@ -49,15 +46,15 @@ class Board(SafeAttrABC):
                  restore_function=default_restore_function,
                  merge_function=default_merge_function,
                  ):
-        self.name = immutable(name, (str, CRangePeriod))
-        self.api = immutable(api, ChartAPI)
+        self.name = immutable(name, (str, CRangePeriod), optional=True)
+        self.api = immutable(api, ChartAPI, optional=True)
 
         self.code_pair = immutable(code_pair, (str, CodePair), copy=True)
         self.crange_period = immutable(crange_period, (str, CRangePeriod), copy=True)
         
         self.data_dir = immutable(data_dir, Path, f=Path, optional=True)
 
-        if df is None:
+        if df is None and self.api is not None:
             df = self.api.empty
 
         self.df = protected(df, pd.DataFrame, optional=True, copy=True)
@@ -77,15 +74,18 @@ class Board(SafeAttrABC):
                 raise KeyError(f"{self.period} not in table.")
 
         self.timestamp_filter = immutable(
-            default_timestamp_filter(self.period)
+            timestamp_filter if timestamp_filter is not None 
+                             else default_timestamp_filter(self.period)
         )
 
         self.save_fstring = immutable(
-            default_save_fstring(self.period)
+            save_fstring if save_fstring is not None
+                         else default_save_fstring(self.period)
         )
 
-        self._save_iterator = immutable(
-            default_save_iterator(self.period)
+        self.save_iterator = immutable(
+            save_iterator if save_iterator is not None
+                          else default_save_iterator(self.period)
         )
     
     def __repr__(self):
@@ -101,6 +101,10 @@ class Board(SafeAttrABC):
         f.write(f"{tab}api={self.api},\n")
         f.write(f"{tab}code_pair={self.code_pair},\n")
         f.write(f"{tab}crange_period={self.crange_period},\n")
+        if isinstance(self.data_dir, Path):
+            f.write(f"{tab}data_dir='{self.data_dir}',\n")
+        else:
+            f.write(f"{tab}data_dir={self.data_dir},\n")
         f.write(f"{tab}interval={self.interval},\n")
         f.write(f"{tab}first_updated={self.first_updated},\n")
         f.write(f"{tab}last_updated={self.last_updated},\n")
@@ -142,6 +146,10 @@ class Board(SafeAttrABC):
             return None
         
         return self.df.index[-1]
+    
+    def set_interval(self, interval):
+        self._interval = interval
+        return self
 
     def should_be_updated(self, interval=None):
         interval = self.arg_interval(interval)
@@ -157,29 +165,40 @@ class Board(SafeAttrABC):
         
         return False
     
+    def focus(self, t=None):
+        self._df = focus(self.df, t)
+        return self.df
+
     def flush(self):
         self._df = self.api.empty
         return self.df
 
-    def save(self, dir_path=None, save_function=None):
-        dir_path = self.arg_data_dir(dir_path)
+    def save(self, data_dir=None, save_function=None):
+        data_dir = self.arg_data_dir(data_dir)
+        
         save_function = self.arg_save_function(save_function)
 
         return save_function(
             df=self.df,
-            dir_path=dir_path,
-            sections=self.save_iterator,
-            format_string=self.save_fstring,
+            dir_path=data_dir,
+            save_iterator=self.save_iterator,
+            save_fstring=self.save_fstring,
             timestamp_filter=self.timestamp_filter
         )
 
-    def read(self, dir_path=None, t=None, save_fstring=None, glob_function=None, restore_function=None):
-        dir_path = self.arg_data_dir(dir_path)
+    def read(self,
+             t=None,
+             data_dir=None,
+             save_fstring=None,
+             glob_function=None,
+             restore_function=None):
+        data_dir = self.arg_data_dir(data_dir)
+
         save_fstring = self.arg_save_fstring(save_fstring)
         glob_function = self.arg_glob_function(glob_function)
         restore_function = self.arg_restore_function(restore_function)
 
-        read_dir = Path(dir_path)
+        read_dir = Path(data_dir)
         if not read_dir.exists():
             raise FileNotFoundError(f"Directory not found '{read_dir}'")
 
@@ -189,16 +208,23 @@ class Board(SafeAttrABC):
 
         paths = focus(paths, t, fstring=save_fstring)
         if len(paths) == 0:
-            raise FileNotFoundError(f"No files remained after applying time filter")
+            raise FileNotFoundError(f"No files remained after applying filter.")
 
         df = standardize(restore_function(paths))
         
         return focus(df, t)
     
-    def load(self, dir_path, t=None, save_fstring=None, glob_function=None, restore_function=None):
+    def load(self,
+             t=None,
+             data_dir=None,
+             save_fstring=None,
+             glob_function=None,
+             restore_function=None):
+        data_dir = self.arg_data_dir(data_dir)
+
         df = self.read(
-            dir_path=dir_path,
             t=t,
+            data_dir=data_dir,
             save_fstring=save_fstring,
             glob_function=glob_function,
             restore_function=restore_function
@@ -212,45 +238,60 @@ class Board(SafeAttrABC):
         df = self.api.download(code_pair=self.code_pair,
                                crange_period=self.crange_period,
                                t=t)
-        return standardize(df)
+        return focus(standardize(df), t)
     
-    def update(self, t=None, force=False):
-        if (not force) and (not self.should_be_updated()):
+    def update(self, t=None, interval=None, force=False, merge_function=None):
+        merge_function = self.arg_merge_function(merge_function)
+        interval = self.arg_interval(interval)
+
+        if (not force) and (not self.should_be_updated(interval)):
             return None
 
         df = self.download(t)
-        self._df = default_merge_function(self.df, df)
-        return self._df
+        df = focus(merge_function(self.df, df), t)
 
-    def sync(self):
-        pass
+        self._df = df
 
-#     def sync(self, dir_path, t=None, update=True, interval=None, glob_function=None, restore_function=None, merge_function=None):
-#         if glob_function is None:
-#             glob_function = default_glob_function
-#         if restore_function is None:
-#             restore_function = default_restore_function
-#         if merge_function is None:
-#             merge_function = default_merge_function
+        return df
 
-#         load_dir = Path(dir_path)
-#         if load_dir.exists():
-#             paths = glob_function(load_dir)
-#             if len(paths) != 0:
-#                 # ディレクトリが存在し、かつ読み込むべきファイルも存在する
-#                 self.df = self.read(load_dir, t=t, glob_function=glob_function, restore_function=restore_function)
+    def sync(self,
+             t=None,
+             data_dir=None,
+             interval=None,
+             force=False,
+             save_fstring=None,
+             glob_function=None,
+             save_function=None,
+             restore_function=None,
+             merge_function=None):
+        data_dir = self.arg_data_dir(data_dir)
+
+        glob_function = self.arg_glob_function(glob_function)
+        save_function = self.arg_save_function(save_function)
+        restore_function = self.arg_restore_function(restore_function)
+        merge_function = self.arg_merge_function(merge_function)
+
+        self.load(
+            t=t,
+            data_dir=data_dir,
+            save_fstring=save_fstring,
+            glob_function=glob_function,
+            restore_function=restore_function
+        )
         
-#         if not self.should_be_updated(interval):
-#             return self
+        df_updated = self.update(
+            t=t,
+            interval=interval,
+            force=force,
+            merge_function=merge_function
+        )
 
-#         if update:
-#             self.update(t=t, merge_function=merge_function)
-#             self.save(dir_path)
+        self.save(
+            data_dir=data_dir,
+            save_function=save_function
+        )
 
-#         return self
-
-#     # def down_sampling(self):
-#     #     pass
+        return df_updated
     
 #     # def normalize(self):
 #     #     pass
@@ -319,7 +360,7 @@ class Chart(SafeAttrABC):
                 ):
         self.api = immutable(api, ChartAPI)
         self.code_pair = self._to_code_pair(code_pair)
-        self.data_dir = Path(data_dir)
+        self.data_dir = immutable(data_dir, Path, f=Path, optional=True)
         self.board = {}
 
         if crange_period is None:
@@ -363,8 +404,8 @@ class Chart(SafeAttrABC):
     def crange_period(self):
         return list(self.board.keys())
 
-    def create_emulator(self, data_dir, source_dir):
-        chart_api = ChartEmulatorAPI(api=self.api, source_dir=source_dir)
+    def create_emulator(self, data_dir, source_dir, on_memory=False):
+        chart_api = ChartEmulatorAPI(api=self.api, source_dir=source_dir, on_memory=on_memory)
         
         return Chart(
             api=chart_api,
@@ -372,16 +413,7 @@ class Chart(SafeAttrABC):
             data_dir=data_dir,
             crange_period=self.crange_period,
         )
-        
-#         emulator_dir = Path(emulator_dir)
-#         data_dir = Path(data_dir)
-
-#         self.save(data_dir=emulator_dir)
-
-#         api = ChartEmulatorAPI(self, emulator_dir)
-
-#         return self.copy(api=api, data_dir=data_dir)
-
+    
     def _to_code_pair(self, code_pair: Union[str, CodePair]):
         if isinstance(code_pair, str):
             return self.api.code_pair_from_string(code_pair)
@@ -389,8 +421,8 @@ class Chart(SafeAttrABC):
             return code_pair.copy()
         raise TypeError(f"code_pair must be instance of {str} or {CodePair}")
         
-    def add(self, crange_period: Union[str, CRangePeriod], name: Optional[str]=None, api=None, interval=None):
-        api = api if api is not None else self.api
+    def add(self, crange_period: Union[str, CRangePeriod], name: Optional[str]=None, data_dir=None, api=None, interval=None):
+        api = self.arg_api(api)
         crange_period = self._make_crange_period(crange_period)
         if name is None:
             name = crange_period
@@ -400,12 +432,16 @@ class Chart(SafeAttrABC):
         if not api.is_valid_crange_period(crange_period):
             raise ValueError(f"invalid crange_period: '{crange_period}'")
         
+        if data_dir is None:
+            data_dir = self.data_dir / self.code_pair.short / crange_period.short
+
         self.board[name] = \
             Board(
                 name=name,
                 api=api,
                 code_pair=self.code_pair,
                 crange_period=crange_period,
+                data_dir=data_dir,
                 interval=interval
             )
         
@@ -436,8 +472,6 @@ class Chart(SafeAttrABC):
         return self
 
     def save(self, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
-        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
-
         if crange_period is None:
             crange_period = list(self.board.keys())
         else:
@@ -445,13 +479,33 @@ class Chart(SafeAttrABC):
 
         for key in crange_period:
             board = self.board[key]
-            dir_path = data_dir / board.code_pair.short / board.crange_period.short
-            board.save(dir_path)
+            if data_dir is None:
+                board.save()
+            else:
+                save_dir = Path(data_dir) / board.code_pair.short / board.crange_period.short
+                board.save(data_dir=save_dir)
         
         return self
 
-    def read(self, crange_period: Union[str, Iterable[str]]=None, data_dir=None, t=None):
-        data_dir = Path(data_dir) if data_dir is not None else self.data_dir
+    def read(self, crange_period: Union[str, Iterable[str]]=None, t=None, data_dir=None):
+        if crange_period is None:
+            crange_period = list(self.board.keys())
+        else:
+            crange_period = self._make_crange_period_list(crange_period)
+        
+        ret = {}
+        for key in crange_period:
+            board = self.board[key]
+            if data_dir is None:
+                ret[board.name] = board.read(t=t)
+            else:
+                read_dir = Path(data_dir) / board.code_pair.short / board.crange_period.short
+                ret[board.name] = board.read(t=t, data_dir=read_dir)
+
+        return ret
+
+    def load(self, crange_period: Union[str, Iterable[str]]=None, t=None, data_dir=None):
+        data_dir = self.arg_data_dir(data_dir)
 
         if crange_period is None:
             crange_period = list(self.board.keys())
@@ -461,13 +515,13 @@ class Chart(SafeAttrABC):
         ret = {}
         for key in crange_period:
             board = self.board[key]
-            dir_path = data_dir / board.code_pair.short / board.crange_period.short
-            ret[board.name] = board.read(dir_path)
+            if data_dir is None:
+                ret[key] = board.load(t=t)
+            else:
+                load_dir = Path(data_dir) / board.code_pair.short / board.crange_period.short
+                ret[key] = board.load(t=t, data_dir=load_dir)
 
         return ret
-
-    def load(self):
-        pass
 
     def download(self, crange_period: Union[str, Iterable[str]]=None, t=None):
         if crange_period is None:
@@ -477,11 +531,11 @@ class Chart(SafeAttrABC):
 
         ret = {}
         for key in crange_period:
-            ret[key] = self.board[key].download(t)
+            ret[key] = self.board[key].download(t=t)
         
         return ret
     
-    def update(self, crange_period=None, t=None, force=False):
+    def update(self, crange_period=None, t=None, interval=None, force=False):
         if crange_period is None:
             crange_period = list(self.board.keys())
         else:
@@ -489,60 +543,26 @@ class Chart(SafeAttrABC):
         
         ret = {}
         for key in crange_period:
-            ret[key] = self.board[key].update(t, force=force)
+            ret[key] = self.board[key].update(t=t, interval=interval, force=force)
         
         return ret
 
-    def sync(self):
-        pass
-
-    
-#     def update(self, crange_interval: Union[str, Iterable[str]], data_dir=None):
-#         data_dir = Path(data_dir) if data_dir is not None else self.data_dir
-#         for key in self._to_crange_interval_list(crange_interval):
-#             board = self.board[key]
-#             dir_path = data_dir / board.code_pair / board.crange_interval
-#             board.update(dir_path)
+    def sync(self, crange_period=None, t=None, data_dir=None, interval=None, force=False):
+        if crange_period is None:
+            crange_period = list(self.board.keys())
+        else:
+            crange_period = self._make_crange_period_list(crange_period)
         
-#         return self
-    
-#     def read(self, crange_interval: Union[str, Iterable[str]]=None, t: datetime=None, data_dir=None):
-#         data_dir = Path(data_dir) if data_dir is not None else self.data_dir
-#         ret = {}
-#         for key in self._to_crange_interval_list(crange_interval):
-#             board = self.board[key]
-#             dir_path = data_dir / board.code_pair / board.crange_interval
-#             ret[key] = board.read(dir_path, t)
+        ret = {}
+        for key in crange_period:
+            board = self.board[key]
+            if data_dir is None:
+                ret[key] = board.sync(t=t, interval=interval, force=force)
+            else:
+                sync_dir = Path(data_dir) / board.code_pair.short / board.crange_period.short
+                ret[key] = board.sync(t=t, data_dir=sync_dir, interval=interval, force=force)
         
-#         return ret
-
-#     def load(self, crange_interval: Union[str, Iterable[str]]=None, t: datetime=None, data_dir=None):
-#         data_dir = Path(data_dir) if data_dir is not None else self.data_dir
-#         for key in self._to_crange_interval_list(crange_interval):
-#             board = self.board[key]
-#             dir_path = data_dir / board.code_pair / board.crange_interval
-#             self.board[key] = board.load(dir_path, t)
-        
-#         return self
-
-#     def save(self, crange_interval: Union[str, Iterable[str]]=None, data_dir=None):
-#         data_dir = Path(data_dir) if data_dir is not None else self.data_dir
-#         for key in self._to_crange_interval_list(crange_interval):
-#             board = self.board[key]
-#             dir_path = data_dir / board.code_pair / board.crange_interval
-#             board.save(dir_path)
-        
-#         return self
-    
-#     def sync(self, crange_interval: Union[str, Iterable[str]]=None, t=None, data_dir=None, update: bool=True, save: bool=True):
-#         data_dir = Path(data_dir) if data_dir is not None else self.data_dir
-#         for key in self._to_crange_interval_list(crange_interval):
-#             board = self.board[key]
-#             dir_path = data_dir / board.code_pair / board.crange_interval
-#             dirmap.ensure(dir_path)
-#             board.sync(dir_path, t=t, update=update)
-        
-#         return self
+        return ret
 
 class ChartDummyAPI(ChartAPI):
     def __init__(self):
@@ -554,6 +574,14 @@ class ChartDummyAPI(ChartAPI):
     def freeze(self):
         return self
 
+    @property
+    def cranges(self):
+        return ['max']
+    
+    @property
+    def periods(self):
+        return ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '3d', '1w']
+    
     @property
     def empty(self):
         return pd.DataFrame([], columns=['timestamp', 'open', 'close', 'high', 'low', 'volume', 'quotevolume'])
@@ -579,13 +607,17 @@ class ChartDummyAPI(ChartAPI):
         
         return crange_period in table
 
-class ChartEmulatorAPI(ChartAPI):
+class ChartEmulatorAPI(SafeAttrABC, ChartAPI):
     def __init__(self,
                  api,
-                 source_dir: Path=None,
+                 source_dir: Path,
+                 on_memory=False
                 ):
-        self._api = api.freeze()
-        self._source_dir = source_dir
+        self.api = immutable(api.freeze())
+        self.source_dir = immutable(source_dir, Path, f=Path)
+        self.on_memory = immutable(on_memory, bool)
+
+        self.board = {}
     
     def __repr__(self):
         return f"ChartEmulatorAPI(api={self._api.__class__.__name__}, source_dir='{self._source_dir}')"
@@ -601,65 +633,36 @@ class ChartEmulatorAPI(ChartAPI):
 #     def code_pairs(self):
 #         return self.api.code_pairs
     
-#     @property
-#     def cranges(self):
-#         return self.api.cranges
+    @property
+    def cranges(self):
+        return self.api.cranges
     
-#     @property
-#     def intervals(self):
-#         return self.api.intervals
+    @property
+    def periods(self):
+        return self.api.periods
     
 #     @property
 #     def max_cranges(self):
 #         return self.api.max_cranges
 
     def is_valid_crange_period(self, crange_period: str) -> bool:
-        return self._api.is_valid_crange_period(crange_period)
+        return self.api.is_valid_crange_period(crange_period)
 
     @property
     def code_pairs(self):
-        return self._api.code_pairs
+        return self.api.code_pairs
 
     @property
     def default_crange_period(self):
-        return self._api.default_crange_period
+        return self.api.default_crange_period
+
+    @property
+    def default_crange_periods(self):
+        return self.api.default_crange_periods
     
     @property
     def empty(self):
-        return self._api.empty
-
-#     @property
-#     def default_crange_intervals(self):
-#         return self.api.default_crange_intervals
-    
-#     @property
-#     def default_timestamp_filter(self):
-#         return self.api.default_timestamp_filter
-    
-#     @property
-#     def default_save_fstring(self):
-#         return self.api.default_save_fstring
-    
-#     @property
-#     def default_save_iterator(self):
-#         return self.api.default_save_iterator
-    
-
-#     def download(self, code_pair, crange, interval, t=None, as_dataframe=True):
-#         if not as_dataframe:
-#             raise ValueError(f"as_dataframe must be True")
-
-#         if code_pair not in self.code_pairs:
-#             raise ValueError(f"code_pair '{code_pair}' not in {self.code_pairs}")
-#         if crange not in self.cranges:
-#             raise ValueError(f"crange '{crange}' not in {self.cranges}")
-#         if interval not in self.intervals:
-#             raise ValueError(f"interval '{interval}' not in {self.intervals}")
-        
-#         crange_interval = ChartEmulatorAPI.make_crange_interval(crange, interval)
-        
-#         if crange_interval not in self.board:
-#             raise ValueError(f"'{crange_interval}' not in dfs")
+        return self.api.empty
 
 #         # 過去のデータをロードするようにつくりなおす
         
@@ -686,18 +689,27 @@ class ChartEmulatorAPI(ChartAPI):
         if code_pair not in self.code_pairs:
             raise ValueError(f"ticker '{code_pair}' not in {self.code_pairs}")
 
-        code_pair = self.make_code_pair_string(code_pair)
-        # if crange not in self.cranges:
-        #     raise ValueError(f"crange '{crange}' not in {self.cranges}")
-        # if period not in self.periods:
-        #     raise ValueError(f"interval '{period}' not in {self.periods}")
-
         if crange_period is None:
             crange_period = self.default_crange_period
 
-        print(self._source_dir)
+        if str(crange_period.crange) not in self.cranges:
+            raise ValueError(f"crange '{crange_period.crange}' not in {self.cranges}")
+        if str(crange_period.period) not in self.periods:
+            raise ValueError(f"interval '{crange_period.period}' not in {self.periods}")
 
+        name = code_pair.short + '_' + crange_period.short
+        
+        if name not in self.board:
+            self.board[name] = Board(
+                code_pair=code_pair,
+                crange_period=crange_period,
+                data_dir=self.source_dir / code_pair.short / crange_period.short
+            )
+        
+            if self.on_memory:
+                self.board[name].load()
 
-        #df = 
-
-        #return focus(df, t)
+        if self.on_memory:
+            return focus(self.board[name].df, t)
+        
+        return self.board[name].read(t=t)

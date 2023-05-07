@@ -68,15 +68,15 @@ class ChartAPI(ABC):
 #     def code_pairs(self) -> List[CodePair]:
 #         pass
     
-#     @property
-#     @abstractmethod
-#     def cranges(self) -> List[str]:
-#         pass
+    @property
+    @abstractmethod
+    def cranges(self) -> List[str]:
+        pass
     
-#     @property
-#     @abstractmethod
-#     def periods(self) -> List[str]:
-#         pass
+    @property
+    @abstractmethod
+    def periods(self) -> List[str]:
+        pass
     
 #     @property
 #     @abstractmethod

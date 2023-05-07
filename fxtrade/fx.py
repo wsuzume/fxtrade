@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional, Type, Union
 
 from .core import type_checked, is_instance_list
+from .safeattr import SafeAttrABC, immutable, protected
 from .api import CodePair, ChartAPI, TraderAPI
 from .stock import Numeric, Stock, Rate
 from .trade import Trade, History
@@ -22,7 +23,7 @@ def assert_valid_name(name):
 
     return True
 
-class FX:
+class FX(SafeAttrABC):
     def __init__(self,
             name: str,
             origin: str,
@@ -30,21 +31,20 @@ class FX:
             trader_api: Type[TraderAPI]=None,
             data_dir: Optional[Union[str, Path]]=None,
             logger: Any=None):
-        self._name = type_checked(name, str)
+        self.name = immutable(name, str)
         assert_valid_name(self.name)
 
-        self._origin = type_checked(origin, str)
+        self.origin = immutable(origin, str)
+        self.chart_api = immutable(chart_api, ChartAPI, optional=True)
+        self.trader_api = immutable(trader_api, TraderAPI, optional=True)
 
-        self._chart_api = type_checked(chart_api, ChartAPI) \
-                            if chart_api is not None else None
-        self._trader_api = type_checked(trader_api, TraderAPI) \
-                            if trader_api is not None else None
+        data_dir = Path(data_dir) / self.name if data_dir is not None else None
+        self.data_dir = immutable(data_dir, Path, f=Path, optional=True)
+        
+        self.market = protected({}, dict)
 
-        self._data_dir = Path(data_dir) if data_dir is not None else None
+        self.logger = immutable(self.set_logger(logger))
 
-        self._logger = self.set_logger(logger)
-
-        self._market = {}
     
     def __getitem__(self, key):
         return self.market[key]
@@ -71,56 +71,24 @@ class FX:
             self.dump(f, indent=indent)
             ret = f.getvalue()
         return ret
-    
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def origin(self):
-        return self._origin
-
-    @property
-    def logger(self):
-        return self._logger
-
-    @property
-    def trader_api(self):
-        if self._trader_api is None:
-            raise RuntimeError("default trader api is not defined")
-        return self._trader_api
-    
-    @property
-    def chart_api(self):
-        if self._chart_api is None:
-            raise RuntimeError("default chart api is not defined")
-        return self._chart_api
-
-    @property
-    def data_dir(self):
-        return self._data_dir / self.name
 
     @property
     def trader_dir(self):
-        if self._data_dir is None:
+        if self.data_dir is None:
             raise RuntimeError("data_dir not defined")
         return self.data_dir / 'trader'
     
     @property
     def chart_dir(self):
-        if self._data_dir is None:
+        if self.data_dir is None:
             raise RuntimeError("data_dir not defined")
         return self.data_dir / 'chart'
 
     @property
     def log_dir(self):
-        if self._data_dir is None:
+        if self.data_dir is None:
             raise RuntimeError("data_dir is not defined")
         return self.data_dir / 'log'
-
-    @property
-    def market(self):
-        return self._market
     
     def get_market(self, key=None):
         if key is None:
@@ -133,12 +101,6 @@ class FX:
             raise TypeError(f"key must be instance of NoneType, str, Iterable[str].")
         
         return market
-
-#     def initial(self, q: Numeric):
-#         return Stock(self.origin, q)
-    
-#     def terminal(self, code: str, q: Numeric):
-#         return Stock(code, q)
     
     def generate_client(self,
                           code: str,
