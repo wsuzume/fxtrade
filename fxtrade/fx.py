@@ -292,6 +292,42 @@ class FX(SafeAttrABC):
         
         return self.wallet
     
+    def save_chart(self, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        ret = {}
+        for name, trader in self._market.items():
+            ret[name] = trader.sync_chart(crange_period=crange_period, data_dir=data_dir)
+        return ret
+
+    def read_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        ret = {}
+        for name, trader in self._market.items():
+            ret[name] = trader.read_chart(t=t, crange_period=crange_period, data_dir=data_dir)
+        return ret
+
+    def load_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        ret = {}
+        for name, trader in self._market.items():
+            ret[name] = trader.load_chart(t=t, crange_period=crange_period, data_dir=data_dir)
+        return ret
+
+    def download_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None):
+        ret = {}
+        for name, trader in self._market.items():
+            ret[name] = trader.download_chart(t=t, crange_period=crange_period)
+        return ret
+
+    def update_chart(self, t=None, crange_period=None, interval=None, force=False):
+        ret = {}
+        for name, trader in self._market.items():
+            ret[name] = trader.update_chart(t=t, crange_period=crange_period, interval=interval, force=force)
+        return ret
+
+    def sync_chart(self, t=None, crange_period=None, data_dir=None, interval=None, force=False):
+        ret = {}
+        for name, trader in self._market.items():
+            ret[name] = trader.sync_chart(t=t, crange_period=crange_period, data_dir=data_dir, interval=interval, force=force)
+        return ret
+
 #     @property
 #     def history(self):
 #         hist = {}

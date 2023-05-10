@@ -487,7 +487,7 @@ class Chart(SafeAttrABC):
         
         return self
 
-    def read(self, crange_period: Union[str, Iterable[str]]=None, t=None, data_dir=None):
+    def read(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
         if crange_period is None:
             crange_period = list(self.board.keys())
         else:
@@ -504,7 +504,7 @@ class Chart(SafeAttrABC):
 
         return ret
 
-    def load(self, crange_period: Union[str, Iterable[str]]=None, t=None, data_dir=None):
+    def load(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
         data_dir = self.arg_data_dir(data_dir)
 
         if crange_period is None:
@@ -523,7 +523,7 @@ class Chart(SafeAttrABC):
 
         return ret
 
-    def download(self, crange_period: Union[str, Iterable[str]]=None, t=None):
+    def download(self, t=None, crange_period: Union[str, Iterable[str]]=None):
         if crange_period is None:
             crange_period = list(self.board.keys())
         else:
@@ -535,7 +535,7 @@ class Chart(SafeAttrABC):
         
         return ret
     
-    def update(self, crange_period=None, t=None, interval=None, force=False):
+    def update(self, t=None, crange_period=None, interval=None, force=False):
         if crange_period is None:
             crange_period = list(self.board.keys())
         else:
@@ -547,7 +547,7 @@ class Chart(SafeAttrABC):
         
         return ret
 
-    def sync(self, crange_period=None, t=None, data_dir=None, interval=None, force=False):
+    def sync(self, t=None, crange_period=None, data_dir=None, interval=None, force=False):
         if crange_period is None:
             crange_period = list(self.board.keys())
         else:

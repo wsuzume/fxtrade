@@ -149,14 +149,23 @@ class Trader:
 #         self.history = self.get_history(start_date)
 #         return self.history
 
-#     def get_chart(self, t=None):
-#         return self.chart.download(t=t)
+    def save_chart(self, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        return self.chart.save(crange_period=crange_period, data_dir=data_dir)
 
-#     def load_chart(self, t=None):
-#         return self.chart.load(t=t)
+    def read_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        return self.chart.read(t=t, crange_period=crange_period, data_dir=data_dir)
 
-#     def sync_chart(self, crange_interval: Union[str, Iterable[str]]=None, t=None, data_dir=None, update: bool=True, save: bool=True):
-#         return self.chart.sync(crange_interval, t, data_dir, update, save)
+    def load_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        return self.chart.load(t=t, crange_period=crange_period, data_dir=data_dir)
+
+    def download_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None):
+        return self.chart.download(t=t, crange_period=crange_period)
+
+    def update_chart(self, t=None, crange_period=None, interval=None, force=False):
+        return self.chart.update(t=t, crange_period=crange_period, interval=interval, force=force)
+    
+    def sync_chart(self, t=None, crange_period=None, data_dir=None, interval=None, force=False):
+        return self.chart.sync(t=t, crange_period=crange_period, data_dir=data_dir, interval=interval, force=force)
     
 #     def minimum_order_quantity(self, code):
 #         return self.api.minimum_order_quantity(code)
