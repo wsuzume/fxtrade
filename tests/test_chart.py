@@ -26,6 +26,7 @@ def test_Board_dummy():
         "    api=ChartDummyAPI(),\n" + \
         "    code_pair=CodePair(base='BTC', quote='JPY'),\n" + \
         "    crange_period=CRangePeriod(crange='max', period='15m'),\n" + \
+        "    data_dir=None,\n" + \
         "    interval=None,\n" + \
         "    first_updated=None,\n" + \
         "    last_updated=None,\n" + \
@@ -120,6 +121,7 @@ def test_Chart_dummy():
         "            api=ChartDummyAPI(),\n" + \
         "            code_pair=CodePair(base='BTC', quote='JPY'),\n" + \
         "            crange_period=CRangePeriod(crange='max', period='15m'),\n" + \
+        "            data_dir='../data/chart/BTC-JPY/max-15m',\n" + \
         "            interval=None,\n" + \
         "            first_updated=None,\n" + \
         "            last_updated=None,\n" + \

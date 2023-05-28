@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 
-from fxtrade import dirmap
+from pathlib import Path
 
 from fxtrade.stock import Stock
 from fxtrade.wallet import Wallet
@@ -86,9 +86,10 @@ def test_io():
         Stock('ETH', 80),
     ])
 
-    path = './tests/data/wallet.csv'
+    Path('./tests/data').mkdir(exist_ok=True)
+    path = Path('./tests/data/wallet.csv')
 
-    dirmap.remove(path)
+    path.unlink(missing_ok=True)
 
     w.to_csv(path)
     w2 = Wallet.from_csv(path)
@@ -110,4 +111,4 @@ def test_io():
 
     assert len(df) == 2
 
-    dirmap.remove(path)
+    path.unlink(missing_ok=True)
