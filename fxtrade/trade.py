@@ -7,24 +7,29 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Optional, Union, Iterable, List
 
-from .core import is_instance_list
 from .stock import as_numeric, Numeric, Stock, Rate
+from .safeattr import SafeAttrABC, immutable, protected
+from .utils import focus, default_save_iterator, default_save_fstring, default_save_function
 
-class Transfer:
-    """Transfer of funds outside of transactions.
-    """
-    @classmethod
-    def deposit(cls):
-        pass
+# class Transfer:
+#     """Transfer of currencies outside of transactions.
+#     """
+#     @classmethod
+#     def deposit(cls, x: Stock, t: Optional[pd.Timestamp]=None):
+#         return Transfer(x, t)
     
-    @classmethod
-    def withdraw(cls):
-        pass
+#     @classmethod
+#     def withdraw(cls, x: Stock, t: Optional[pd.Timestamp]=None):
+#         return Transfer(-x, t)
 
-    def __init__(self, x: Stock, t: Optional[pd.Timestamp]):
-        if t is None:
-            t = pd.Timestamp.now()
-        self.x = x
+#     @classmethod
+#     def fee(cls, x: Stock, t: Optional[pd.Timestamp]=None):
+#         return Transfer(-x, t)
+
+#     def __init__(self, x: Stock, t: Optional[pd.Timestamp]=None):
+#         if t is None:
+#             t = pd.Timestamp.now()
+#         self.x = x
     
 class Trade:
     """Represent a single transaction.
@@ -34,7 +39,7 @@ class Trade:
     @property
     def columns(cls):
         return pd.Index([
-            't', 'order_id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)'
+            't', 'id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)'
         ])
 
     @classmethod
@@ -50,39 +55,52 @@ class Trade:
     @classmethod
     @property
     def string_columns(cls):
-        return pd.Index(['order_id', 'from', 'to'])
+        return pd.Index(['id', 'from', 'to'])
+    
+    @property
+    def info_columns(self):
+        return pd.Index([ k for k in self.info.keys() ])
 
-    @staticmethod
-    def from_series(s: pd.Series):
+    @property
+    def all_columns(self):
+        return pd.Index(
+            list(self.columns) + list(self.info_columns)
+        )
+
+    @classmethod
+    def from_series(cls, s: pd.Series):
         """Create Trade from pandas.Series. Columns must be
-        pd.Index(['t', 'order_id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)'])
+        pd.Index(['t', 'id', 'from', 'X(t)', 'to', 'Y(t+dt)', 'R(yt/xt)'])
         """
         x = Stock(s['from'], s['X(t)'])
         y = Stock(s['to'], s['Y(t+dt)'])
         t = s['t']
-        order_id = s['order_id']
+        id = s['id']
 
         r = Rate.from_stocks(x, y)
         
         if r.r != s['R(yt/xt)']:
             raise ValueError("invalid rate on R(yt/xt).")
         
-        return Trade(x=x, y=y, t=t, order_id=order_id)
+        info = { idx: s[idx] for idx in s.index if idx not in set(cls.columns) }
+        
+        return Trade(x=x, y=y, t=t, id=id, **info)
     
     @staticmethod
-    def from_stock_and_rate(stock: Stock, rate: Rate, t=None, order_id=None):
+    def from_stock_and_rate(stock: Stock, rate: Rate, t=None, id=None):
         """Create Trade from Stock and Rate.
         """
         x = stock
         y = stock * rate
         
-        return Trade(x, y, t, order_id)
+        return Trade(x, y, t, id)
     
     def __init__(self,
                  x: Stock,
                  y: Stock,
                  t: Optional[pd.Timestamp]=None,
-                 order_id: Optional[str]=None):
+                 id: Optional[str]=None,
+                 **kwargs):
         """
         Parameters
         ----------
@@ -92,8 +110,10 @@ class Trade:
             The stock after the transaction.
         t : pandas.Timestamp, optional
             The time at which the transaction took place. If not specified, the current time will be set.
-        order_id : str, optional
-            Order ID.
+        id : str, optional
+            ID to distinguish that transaction from others.
+        kwargs
+            Additional infomation of the trade.
         """
         if t is None:
             t = pd.Timestamp.now()
@@ -102,7 +122,9 @@ class Trade:
         self._x = x
         self._y = y
         
-        self.order_id = order_id
+        self.id = id
+
+        self.info = { k: v for k, v in kwargs.items() }
     
     @property
     def x(self) -> Stock:
@@ -127,19 +149,28 @@ class Trade:
     def __repr__(self):
         r = self.rate.r if isinstance(self.rate, Rate) else np.nan
         
-        if self.order_id is None:
+        if self.id is None:
             return f"Trade({self.t} | R(yt/xt): {float(r)} | "\
                    f"X(t): {float(self.x.q)}{self.x.code} -> Y(t+dt): {float(self.y.q)}{self.y.code})"
-        return f"Trade({self.order_id} | {self.t} | R(yt/xt): {float(r)} | "\
+        return f"Trade({self.id} | {self.t} | R(yt/xt): {float(r)} | "\
                f"X(t): {float(self.x.q)}{self.x.code} -> Y(t+dt): {float(self.y.q)}{self.y.code})"
     
     def as_series(self) -> pd.Series:
         """Convert to pandas.Series.
         """
-        return pd.Series([self.t, self.order_id,
-                          self.x.code, self.x.q,
-                          self.y.code, self.y.q,
-                          self.rate.r], index=Trade.columns)
+        xs = [
+            self.t, self.id,
+            self.x.code, self.x.q,
+            self.y.code, self.y.q,
+            self.rate.r,
+        ]
+        columns = list(Trade.columns)
+
+        for k, v in self.info.items():
+            xs.append(v)
+            columns.append(k)
+
+        return pd.Series(xs, index=columns)
     
     def split_x(self, x: Stock):
         """
@@ -156,7 +187,7 @@ class Trade:
         y1 = x1 * self.rate
         y2 = x2 * self.rate
         
-        return Trade(x1, y1, self.t, self.order_id), Trade(x2, y2, self.t, self.order_id)
+        return Trade(x1, y1, self.t, self.id, **self.info), Trade(x2, y2, self.t, self.id, **self.info)
     
     def split_y(self, y: Stock):
         """
@@ -173,7 +204,7 @@ class Trade:
         x1 = y1 / self.rate
         x2 = y2 / self.rate
         
-        return Trade(x1, y1, self.t, self.order_id), Trade(x2, y2, self.t, self.order_id)
+        return Trade(x1, y1, self.t, self.id, **self.info), Trade(x2, y2, self.t, self.id, **self.info)
     
     def split(self, z: Stock):
         """
@@ -209,7 +240,7 @@ class Trade:
         x = self.x.floor(n)
         y = x * self.rate
         
-        return Trade(x, y, self.t, self.order_id)
+        return Trade(x, y, self.t, self.id, **self.info)
     
     def yfloor(self, n=6):
         """
@@ -218,7 +249,7 @@ class Trade:
         y = self.y.floor(n)
         x = y / self.rate
         
-        return Trade(x, y, self.t, self.order_id)
+        return Trade(x, y, self.t, self.id, **self.info)
     
     def floor(self, n=6):
         """
@@ -233,7 +264,7 @@ class Trade:
         x = self.x.ceil(n)
         y = x * self.rate
         
-        return Trade(x, y, self.t, self.order_id)
+        return Trade(x, y, self.t, self.id, **self.info)
     
     def yceil(self, n=6):
         """
@@ -242,7 +273,7 @@ class Trade:
         y = self.y.ceil(n)
         x = y / self.rate
         
-        return Trade(x, y, self.t, self.order_id)
+        return Trade(x, y, self.t, self.id, **self.info)
     
     def ceil(self, n=6):
         """
@@ -253,22 +284,22 @@ class Trade:
     def __mul__(self, other):
         """Try to multiply the other to both x and y.
         """
-        return Trade(self.x * other, self.y * other, self.t, self.order_id)
+        return Trade(self.x * other, self.y * other, self.t, self.id, **self.info)
     
     def __truediv__(self, other):
         """Try to devide by the other to both x and y.
         """
-        return Trade(self.x / other, self.y / other, self.t, self.order_id)
+        return Trade(self.x / other, self.y / other, self.t, self.id, **self.info)
     
     def __floordiv__(self, other):
         """Try to devide by the other to both x and y and calculate floor().
         """
-        return Trade(self.x / other, self.y / other, self.t, self.order_id).floor()
+        return Trade(self.x / other, self.y / other, self.t, self.id, **self.info).floor()
     
     def __mod__(self, other):
         """Try to devide by the other to both x and y and calculate ceil().
         """
-        return Trade(self.x / other, self.y / other, self.t, self.order_id).ceil()
+        return Trade(self.x / other, self.y / other, self.t, self.id, **self.info).ceil()
 
 class FailedTrade:
     def __init__(self, message):
@@ -295,11 +326,11 @@ class TradePair:
         """
         before = Trade(x=Stock(s['code_X'], s['X(s)']),
                        y=Stock(s['code_Y'], s['Y(s+ds)=Y(t)']),
-                       order_id=s['before_id'], t=s['s'])
+                       id=s['before_id'], t=s['s'])
         
         after = Trade(x=Stock(s['code_Y'], s['Y(s+ds)=Y(t)']),
                       y=Stock(s['code_Z'], s['Z(t+dt)']),
-                      order_id=s['after_id'], t=s['t'])
+                      id=s['after_id'], t=s['t'])
         
         if before.rate.r != s['R(ys/xs)']:
             raise ValueError('invalid rate on R(ys/xs)')
@@ -332,8 +363,8 @@ class TradePair:
         """Convert to pandas.Series.
         """
         return pd.Series([
-                            self.before.order_id,
-                            self.after.order_id,
+                            self.before.id,
+                            self.after.id,
                             self.before.t,
                             self.after.t,
                             self.before.x.q,
@@ -346,345 +377,3 @@ class TradePair:
                             self.after.rate.r,
                             (self.before.rate * self.after.rate).r,
                          ], index=TradePair.columns)
-        
-class History:
-    """
-    Keep all transactions in a dataframe.
-    """
-    @classmethod
-    @property
-    def columns(cls):
-        return Trade.columns
-    
-    @classmethod
-    @property
-    def datetime_columns(cls):
-        return Trade.datetime_columns
-
-    @classmethod
-    @property
-    def numeric_columns(cls):
-        return Trade.numeric_columns
-    
-    @classmethod
-    @property
-    def string_columns(cls):
-        return Trade.string_columns
-
-    @classmethod
-    def typecast(cls, df):
-        df = df[cls.columns].copy()
-
-        for col in cls.datetime_columns:
-            df[col] = df[col].apply(pd.Timestamp)
-        for col in cls.numeric_columns:
-            df[col] = df[col].apply(Fraction)
-        for col in cls.string_columns:
-            df[col] = df[col].apply(str)
-        
-        return df
-    
-    @classmethod
-    def read_csv(cls, path):
-        path = Path(path)
-        df = pd.read_csv(path, index_col=0, parse_dates=True)
-        return cls.typecast(df)
-    
-    @classmethod
-    def from_csv(cls, path):
-        return History(cls.read_csv(path))
-
-    def __init__(self, trade: Optional[Union[Trade, Iterable[Trade]]]=None):
-        """
-        Parameters
-        ----------
-        trade : Union[Trade, Iterable[Trade]], optional
-            A trade or a list of trades.
-        """
-        self._df = pd.DataFrame([], columns=Trade.columns)
-        
-        if trade is not None:
-            self.add(trade)
-    
-    def __repr__(self):
-        return f"History(N={len(self._df)})"
-    
-    @property
-    def df(self) -> pd.DataFrame:
-        """Return the copy of history dataframe.
-        """
-        return self._df.copy()
-    
-    def copy(self) -> History:
-        """Return the copy of history.
-        """
-        return History(self._df)
-
-    def to_csv(self, path, append=True):
-        df = self._df
-
-        path = Path(path)
-        if path.exists():
-            df_old = self.read_csv(path)
-            df = pd.concat([df_old, df], axis=0).sort_index()
-        
-        return df.to_csv(path, index=True)
-
-    def __getitem__(self, idx):
-        return Trade.from_series(self._df.loc[idx])
-    
-    def add(self, trade: Optional[Union[Trade, Iterable[Trade], History]]) -> History:
-        """
-        Add a trade or a list of trades to the history.
-        """
-        if trade is None:
-            return self
-        elif isinstance(trade, History):
-            df = trade._df
-        elif isinstance(trade, pd.DataFrame):
-            df = trade
-        elif isinstance(trade, pd.Series):
-            df = pd.DataFrame([ trade ])
-        elif isinstance(trade, Trade):
-            df = pd.DataFrame([ trade.as_series() ])
-        elif is_instance_list(trade, Trade):
-            df = pd.DataFrame([ t.as_series() for t in trade ])
-        else:
-            raise TypeError("trade must be type of Trade or Iterable[Trade]")
-            
-        df = pd.concat([self._df, df]).reset_index(drop=True)
-        self._df = self.typecast(df)
-
-        return self
-    
-    def drop(self, idx):
-        """
-        Drop the records which specified by idx.
-        """
-        self._df = self._df.drop(idx)
-    
-    def as_trade_list(self,
-                      sort_by: Union[str, list[str]]=None,
-                      ascending: Optional[Union[bool, list[bool]]]=True) -> List[Trade]:
-        """
-        Decompose history to a list of trades
-        """
-        if sort_by is None:
-            df = self.df
-        else:
-            df = self.df.sort_values(by=sort_by, ascending=ascending)
-        return [ Trade.from_series(x) for _, x in df.iterrows() ]
-    
-    def get_pair_trade_index(self, trade: Trade, ascending: bool=True):
-        """
-        Return the index of previous trades that should be paired with the trade.
-        """
-        df = self._df[(self._df['from'] == trade.y.code) & (self._df['to'] == trade.x.code)]
-        df = df[df['t'] <= trade.t].sort_values(by='R(yt/xt)', ascending=ascending)
-        
-        if len(df) == 0:
-            return pd.Index([])
-        
-        amount = trade.x
-        idx = []
-        for i, row in df.iterrows():
-            idx.append(i)
-            Yt = row['Y(t+dt)']
-            if Yt >= amount:
-                break
-            amount -= Yt
-        
-        return df.loc[idx].index
-    
-    def settle(self, trade: Trade, ascending: bool=True, copy: bool=True):
-        pair_idx = self.get_pair_trade_index(trade, ascending)
-        
-        if len(pair_idx) == 0:
-            return self, None
-        
-        report = Report()
-        for idx in pair_idx:
-            pair, trade = self[idx].settle(trade)
-            report.add(pair)
-        
-        hist = self if not copy else self.copy()
-        hist.drop(pair_idx)
-        hist.add(trade)
-        
-        return hist, report
-    
-    def close(self):
-        """
-        Divide trades to date into those with confirmed
-        profits or losses and those that have yet to be confirmed.
-        """
-        trade_list = self.as_trade_list(sort_by='t', ascending=True)
-        
-        hist = History()
-        
-        hist.add(trade_list.pop(0))
-        
-        report = Report()
-        for trade in trade_list:
-            hist, settled = hist.settle(trade)
-            if settled is None:
-                hist.add(trade)
-            else:
-                report.add(settled)
-        
-        return hist, report
-    
-    def group_by_code(self):
-        df = self._df
-        
-        group = [ '-'.join([row['from'], row['to']]) for _, row in df.iterrows() ]
-        group = pd.Series(group, index=df.index)
-        
-        return df.groupby(group)
-    
-    def describe(self, code_from: str, code_to: str):
-        df = self._df
-        
-        df = df[(df['from'] == code_from) & (df['to'] == code_to)]
-        
-        rate_mean = np.nan
-        if df['X(t)'].sum() != 0:
-            rate_mean = df['Y(t+dt)'].sum() / df['X(t)'].sum()
-
-        vmin = df['R(yt/xt)'].min()
-        mins = df[df['R(yt/xt)'] == vmin]
-
-        vmax = df['R(yt/xt)'].max()
-        maxs = df[df['R(yt/xt)'] == vmax]
-
-        return pd.Series([code_from,
-                          code_to,
-                          Fraction(0),
-                          Fraction(0),
-                          df['X(t)'].sum(),
-                          df['Y(t+dt)'].sum(),
-                          rate_mean,
-                          mins['X(t)'].sum(),
-                          mins['Y(t+dt)'].sum(),
-                          vmin,
-                          maxs['X(t)'].sum(),
-                          maxs['Y(t+dt)'].sum(),
-                          vmax,
-                         ], index=TradeSummary.columns)
-    
-    def summarize(self, origin: Optional[str]=None):
-        hist, report = self.close()
-        
-        ret = []
-        if len(report._df) != 0:
-            idx_dict = report.group_by_code().indices
-            for idx in idx_dict.values():
-                rep = report.df.loc[idx]
-
-                code_X = rep.iloc[0]['code_X']
-                code_Y = rep.iloc[0]['code_Y']
-
-                pos_idx = (hist._df['from'] == code_X) & (hist._df['to'] == code_Y)
-                pos = History(hist._df[pos_idx])
-                
-                desc = pos.describe(code_X, code_Y)
-                desc['used'] = rep['X(s)'].sum()
-                desc['earned'] = rep['Z(t+dt)'].sum()
-
-                ret.append(desc)
-        
-        df = pd.DataFrame(ret, columns=TradeSummary.columns)
-        
-        if len(hist._df) != 0:
-            ret = []
-            idx_dict = hist.group_by_code().indices
-            for idx in idx_dict.values():
-                rec = hist._df.loc[idx]
-
-                code_X = rec.iloc[0]['from']
-                code_Y = rec.iloc[0]['to']
-            
-                pos = df[(df['capital'] == code_X) & (df['via'] == code_Y)]
-                
-                if len(pos) != 0:
-                    break
-                
-                desc = History(rec).describe(code_X, code_Y)
-                ret.append(desc)
-            
-            df = pd.concat([df, pd.DataFrame(ret)], axis=0)
-        
-        if origin is None:
-            df = df.sort_values(by=['capital', 'via'])
-        else:
-            primary_idx = (df['capital'] == origin)
-            secondary_idx = (df['via'] == origin)
-        
-            primary_df = df[primary_idx].sort_values(by=['via'])
-            secondary_df = df[secondary_idx].sort_values(by=['capital'])
-            other_df = df[~primary_idx & ~secondary_idx].sort_values(by=['capital', 'via'])
-            
-            df = pd.concat([primary_df, secondary_df, other_df], axis=0)
-            
-        return df.reset_index(drop=True)
-
-class TradeSummary:
-    @classmethod
-    @property
-    def columns(cls):
-        return pd.Index([
-            'capital', 'via', 'used', 'earned', 'position', 'hold', 'rate_mean',
-            'position_min', 'hold_min', 'rate_min', 'position_max', 'hold_max', 'rate_max',
-        ])
-
-class Report:
-    @staticmethod
-    def from_dataframe(df):
-        ret = Report()
-        ret._df = df.copy()
-        return ret
-    
-    def __init__(self, trade_pair: Optional[Union[TradePair, Iterable[TradePair]]]=None):
-        self._df = pd.DataFrame([], columns=TradePair.columns)
-        
-        if trade_pair is not None:
-            self.add(trade_pair)
-    
-    def copy(self):
-        return Report.from_dataframe(self._df)
-    
-    def add(self, trade_pair: Optional[Union[TradePair, Iterable[TradePair], Report]], copy: bool=False):
-        if trade_pair is None:
-            return
-        
-        rep = self if not copy else self.copy()
-        
-        df = None
-        if isinstance(trade_pair, Report):
-            df = trade_pair._df
-        if isinstance(trade_pair, TradePair):
-            df = pd.DataFrame([ trade_pair.as_series() ])
-        elif isinstance(trade_pair, Iterable):
-            df = pd.DataFrame([ tp.as_series() for tp in trade_pair ])
-        
-        if df is None:
-            raise TypeError("trade_pair must be type of TradePair or Iterable[TradePair]")
-        
-        rep._df = pd.concat([rep._df, df]).reset_index(drop=True)
-        
-        return rep
-    
-    @property
-    def df(self):
-        return self._df.copy()
-    
-    def as_trade_pair_list(self):
-        return [ TradePair.from_series(x) for _, x in self.df.iterrows() ]
-    
-    def group_by_code(self):
-        df = self._df
-        
-        group = [ '-'.join([row['code_X'], row['code_Y'], row['code_Z']]) for _, row in df.iterrows() ]
-        group = pd.Series(group, index=df.index)
-        
-        return df.groupby(group)

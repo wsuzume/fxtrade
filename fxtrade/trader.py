@@ -1,39 +1,45 @@
 import pandas as pd
 
 from io import StringIO
+from datetime import datetime
 from fractions import Fraction
 from pathlib import Path
-from typing import Iterable, Optional, Type, Union
+from typing import Any, Iterable, Optional, Type, Union
 
-from .trade import History
 from .api import CodePair, TraderAPI
 from .chart import Chart
 from .wallet import Wallet
-
+from .trade import Trade
+from .history import History
+from .stock import Stock
 from .stocks import JPY, BTC
+from .safeattr import SafeAttrABC, immutable, protected
+from .utils import default_save_iterator
 
-class Trader:
+class Trader(SafeAttrABC):
     def __init__(self,
                  api: Type[TraderAPI],
                  code_pair: CodePair,
                  chart: Chart,
-                 wallet: Wallet=None,
-                 history: History=None,
-                 data_dir: Optional[Union[str, Path]]=None):
-        self.api = api
-        self.code_pair = code_pair.copy()
-        self.chart = chart
-        self.wallet = Wallet(wallet)[[self.code_pair.base, self.code_pair.quote]]
-        self.history = History(history)
-        self.data_dir = data_dir
-    
-    @property
-    def wallet(self):
-        return self._wallet
-    
-    @wallet.setter
-    def wallet(self, w):
-        self._wallet = w
+                 data_dir: Optional[Union[str, Path]]=None,
+                 wallet: Optional[Wallet]=None,
+                 history: Optional[History]=None):
+        self.api = immutable(api, TraderAPI)
+        self.code_pair = immutable(code_pair.copy(), CodePair)
+        self.chart = immutable(chart, Chart)
+        self.data_dir = immutable(data_dir, Path, f=Path, optional=True)
+        
+        self.wallet = protected(
+            Wallet(wallet)[[self.code_pair.base, self.code_pair.quote]],
+            type_=Wallet,
+            optional=True
+        )
+        
+        self.history = protected(
+            History(history),
+            type_=History,
+            optional=True
+        )
 
     def __getitem__(self, key):
         return self.chart[key]
@@ -76,11 +82,149 @@ class Trader:
         # chart = self.chart.create_emulator(emulator_dir, chart_dir)
         # api = TraderEmulatorAPI(self, chart, emulator_dir)
         # return Trader(code_pair=self.code_pair, api=api, chart=chart, wallet=self.wallet, history=self.history, data_dir=trader_dir)
+
+    # Chart wrapper
+    def save_chart(self, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        return self.chart.save(crange_period=crange_period, data_dir=data_dir)
+
+    def read_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        return self.chart.read(t=t, crange_period=crange_period, data_dir=data_dir)
+
+    def load_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
+        return self.chart.load(t=t, crange_period=crange_period, data_dir=data_dir)
+
+    def download_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None):
+        return self.chart.download(t=t, crange_period=crange_period)
+
+    def update_chart(self, t=None, crange_period=None, interval=None, force=False):
+        return self.chart.update(t=t, crange_period=crange_period, interval=interval, force=force)
     
+    def sync_chart(self, t=None, crange_period=None, data_dir=None, interval=None, force=False):
+        return self.chart.sync(t=t, crange_period=crange_period, data_dir=data_dir, interval=interval, force=force)
+
+    # Trader api wrapper
+    def minimum_order_quantity(self):
+        """
+        最小注文可能金額
+        """
+        return self.api.minimum_order_quantity(self.code_pair)
+    
+    def maximum_order_quantity(self):
+        """
+        最大注文可能金額
+        """
+        return self.api.maximum_order_quantity(self.code_pair)
+    
+    def get_commission(self):
+        """
+        取引手数料
+        """
+        return self.api.get_commission(self.code_pair)
+    
+    def get_best_bid(self):
+        """
+        最低買値
+        """
+        return self.api.get_best_bid(self.code_pair)
+    
+    def get_best_ask(self):
+        """
+        最高売値
+        """
+        return self.api.get_best_ask(self.code_pair)
+    
+    def get_max_available(self):
+        """
+        買い注文可能な最大量。Bitflyer の場合、実際に取引後に手に入るのはここから手数料を引いた量。
+        """
+
+        # 買い値
+        bid_rate = self.get_best_bid()
+        
+        init = self.wallet[self.code_pair.quote]
+
+        term = (init / bid_rate).floor(6)
+        init = (term * bid_rate).ceil(0)
+
+        return Trade(init, term, t=None)
+    
+    def get_max_salable(self):
+        """
+        売り注文可能な最大量。Bitflyer の場合、この額からさらに手数料が引かれる。
+        """
+        commission = self.get_commission()
+
+        # 売り値
+        ask_rate = self.get_best_ask()
+
+        term = (self.wallet[self.code_pair.base] * (1 - commission)).floor()
+        init = (term * ask_rate).ceil()
+
+        return Trade(term, init, t=None)
+
+    def buy(self, x: Union[Stock, Trade], t=None, *, permit=False) -> Any:
+        """
+        間違えて購入しないように購入する対象を明示する Stock しか許可しない。
+        うっかり取引しないように permit=True を指定しないと取引は実行されない。
+        サービスによってレスポンスが異なるので戻り値は API のものをそのまま返す。
+        """
+
+        if not permit:
+            raise RuntimeError(f"The trade was aborted due to lack of permit=True flag.")
+
+        if isinstance(x, Trade):
+            x = x.y
+        elif not isinstance(x, Stock):
+            raise TypeError(f"x must be instance of Stock or Trade.")
+
+        if x.code != self.code_pair.base:
+            raise ValueError(f"This trader manipulates {self.code_pair.base} but actual code {x.code}.")
+
+        minimum = self.minimum_order_quantity()
+        maximum = self.maximum_order_quantity()
+        if x < minimum:
+            raise ValueError(f'{x} is under minimum order quantity {minimum}.')
+        if x > maximum:
+            raise ValueError(f'{x} is over maximum order quantity {maximum}.')
+        
+        return self.api.buy(float(x.q), t=t, history=self.history)
+    
+    def sell(self, x: Union[Stock, Trade], t=None, *, permit=False) -> Any:
+        """
+        間違えて購入しないように購入する対象を明示する Stock しか許可しない。
+        うっかり取引しないように permit=True を指定しないと取引は実行されない。
+        サービスによってレスポンスが異なるので戻り値は API のものをそのまま返す。
+        """
+        if not permit:
+            raise RuntimeError(f"The trade was aborted due to lack of permit=True flag.")
+        
+        if isinstance(x, Trade):
+            x = x.x
+        elif not isinstance(x, Stock):
+            raise TypeError(f"x must be instance of Stock or Trade.")
+
+        if x.code != self.code_pair.base:
+            raise ValueError(f"This trader manipulates {self.code_pair.base} but actual code {x.code}.")
+
+        minimum = self.minimum_order_quantity()
+        maximum = self.maximum_order_quantity()
+        if x < minimum:
+            raise ValueError(f'{x} is under minimum order quantity {minimum}.')
+        if x > maximum:
+            raise ValueError(f'{x} is over maximum order quantity {maximum}.')
+            
+        return self.api.sell(float(x.q), t=t, history=self.history)
+
+    @property
+    def wallet_dir(self):
+        if self.data_dir is None:
+            raise ValueError(f"wallet_dir is undefined when data_dir is None.")
+        return self.data_dir / 'wallet'
+
     def get_wallet_path(self, path=None):
         if path is not None:
             return Path(path)
-        return self.data_dir / 'wallet.csv'
+        return self.wallet_dir / 'wallet.csv'
 
     def save_wallet(self, path=None, t=None, append: bool=False, verbose: bool=True):
         path = self.get_wallet_path(path)
@@ -101,7 +245,7 @@ class Trader:
         return Wallet.from_csv(path, code=self.code_pair, return_t=return_t)
 
     def load_wallet(self, path=None, return_t: bool=False, verbose: bool=False):
-        (self.wallet, t), path = self.read_wallet(path, return_t=True, verbose=True)
+        (self._wallet, t), path = self.read_wallet(path, return_t=True, verbose=True)
 
         if return_t and verbose:
             return (self.wallet, t), path
@@ -116,7 +260,7 @@ class Trader:
         return self.api.download_wallet()[self.code_pair]
     
     def update_wallet(self):
-        self.wallet = self.download_wallet()
+        self._wallet = self.download_wallet()
         return self.wallet
 
     def sync_wallet(self, path=None, append=False, verbose: bool=False):
@@ -128,66 +272,43 @@ class Trader:
         
         return self.wallet, path
     
-#     def get_chart(self, code=None, t=None):
-#         return self.api.get_chart(code, t=t)
-    
-#     def get_best_bid(self):
-#         code = self.api.make_code_pair(self.code_pair)
-#         return self.api.get_best_bid(code=code)
-    
-#     def get_best_ask(self):
-#         code = self.api.make_code_pair(self.code_pair)
-#         return self.api.get_best_ask(code=code)
-    
-#     def get_commission(self):
-#         return self.api.get_commission()
-    
-#     def get_history(self, start_date=None):
-#         return self.api.get_history(start_date)
+    @property
+    def history_dir(self):
+        if self.data_dir is None:
+            raise ValueError(f"history_dir is undefined when data_dir is None.")
+        return self.data_dir / 'history'
 
-#     def sync_history(self, start_date=None):
-#         self.history = self.get_history(start_date)
-#         return self.history
+    def save_history(self, dir_path=None):
+        if dir_path is None:
+            dir_path = self.history_dir
 
-    def save_chart(self, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
-        return self.chart.save(crange_period=crange_period, data_dir=data_dir)
+        self.history.save(dir_path)
 
-    def read_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
-        return self.chart.read(t=t, crange_period=crange_period, data_dir=data_dir)
-
-    def load_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None, data_dir=None):
-        return self.chart.load(t=t, crange_period=crange_period, data_dir=data_dir)
-
-    def download_chart(self, t=None, crange_period: Union[str, Iterable[str]]=None):
-        return self.chart.download(t=t, crange_period=crange_period)
-
-    def update_chart(self, t=None, crange_period=None, interval=None, force=False):
-        return self.chart.update(t=t, crange_period=crange_period, interval=interval, force=force)
+        return dir_path
     
-    def sync_chart(self, t=None, crange_period=None, data_dir=None, interval=None, force=False):
-        return self.chart.sync(t=t, crange_period=crange_period, data_dir=data_dir, interval=interval, force=force)
-    
-#     def minimum_order_quantity(self, code):
-#         return self.api.minimum_order_quantity(code)
-    
-#     def maximum_order_quantity(self, code):
-#         return self.api.maximum_order_quantity(code)
-    
-#     def buy(self, trade):
-#         if trade.y < self.minimum_order_quantity(trade.y.code):
-#             raise ValueError('under minimum')
-#         if trade.y > self.maximum_order_quantity(trade.y.code):
-#             raise ValueError('over maximum')
+    def read_history(self, dir_path=None, t=None):
+        if dir_path is None:
+            dir_path = self.history_dir
         
-#         return self.api.buy(float(trade.y.q), t=trade.t)
+        return self.history.read(dir_path)
+
+    def load_history(self, dir_path=None, t=None):
+        if dir_path is None:
+            dir_path = self.history_dir
+
+        self.history.load(dir_path)
+
+        return dir_path
+
+    def download_history(self, t=None) -> History:
+        return self.api.download_history(t=t)
     
-#     def sell(self, trade):
-#         if trade.x < self.minimum_order_quantity(trade.x.code):
-#             raise ValueError('under minimum')
-#         if trade.x > self.maximum_order_quantity(trade.x.code):
-#             raise ValueError('over maximum')
-            
-#         return self.api.sell(float(trade.x.q), t=trade.t)
+    def update_history(self, t=None) -> History:
+        self._history = self.download_history(t=t)
+        return self._history
+
+    def sync_history(self, t=None):
+        return self.update_history(t)
 
 class TraderDummyAPI(TraderAPI):
     def __init__(self):
@@ -238,7 +359,7 @@ class TraderEmulatorAPI(TraderAPI):
         return self._api.maximum_order_quantity(code, t)
     
     def download_wallet(self):
-        path = self._source_dir / 'wallet.csv'
+        path = self._source_dir / 'wallet' / 'wallet.csv'
         return Wallet.from_csv(path, return_t=False)
     
 #     def get_balance(self, t=None):
@@ -267,8 +388,14 @@ class TraderEmulatorAPI(TraderAPI):
 #     def get_history(self, start_date=None, t=None):
 #         return self.history
     
-#     def buy(self, size, t=None):
-#         return f"Buy({size})", t
+    def buy(self, x, t=None, history=None):
+        # この中に History に取引記録を追加する処理を書く
+        if t is None:
+            raise ValueError(f"t must be specified.")
+        print(history)
+        return f"Buy({x})", t
 
-#     def sell(self, size, t=None):
-#         return f"Sell({size})", t
+    def sell(self, x, t=None, history=None):
+        if t is None:
+            raise ValueError(f"t must be specified.")
+        return f"Sell({x})", t

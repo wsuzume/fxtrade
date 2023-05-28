@@ -11,7 +11,8 @@ from .core import type_checked, is_instance_list
 from .safeattr import SafeAttrABC, immutable, protected
 from .api import CodePair, ChartAPI, TraderAPI
 from .stock import Numeric, Stock, Rate
-from .trade import Trade, History
+from .trade import Trade
+from .history import History
 from .chart import Chart, ChartEmulatorAPI
 from .trader import Trader, TraderEmulatorAPI
 from .wallet import Wallet
@@ -363,27 +364,6 @@ class FX(SafeAttrABC):
 #             trader.load_chart()
 #         return self
     
-#     def get_max_available(self, code):
-#         # 買い値
-#         bid_rate = self[code].get_best_bid()
-        
-#         init = self.wallet[self.origin]
-        
-#         term = (init / bid_rate).floor(6)
-#         init = (term * bid_rate).ceil(0)
-
-#         return Trade(init, term, t=None)
-    
-#     def get_max_salable(self, code, commission=None):
-#         commission = self[code].get_commission()
-
-#         # 売り値
-#         ask_rate = self[code].get_best_ask()
-
-#         term = (self.wallet[code] * (1 - commission)).floor()
-#         init = (term * ask_rate).ceil()
-
-#         return Trade(term, init, t=None)
     
 #     def get_last_trade(self, code):
 #         last_trade = self[code].get_history(start_date=datetime(2022, 2, 1)).df.iloc[0]

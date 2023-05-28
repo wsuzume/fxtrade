@@ -44,28 +44,44 @@ def normalize(df: pd.DataFrame, dt: timedelta):
 
     return df
 
-def focus(x, t, fstring=None):
+def focus(x, t, fstring=None, column=None):
     def _focus(s, t):
         if t is None:
             return True
         elif isinstance(t, datetime):
             return s <= t
-        elif is_instance_list(t, datetime, 2):
+        elif is_instance_list(t, datetime, n=1):
+            return s >= t[0]
+        elif is_instance_list(t, datetime, n=2):
             return t[0] <= s <= t[1]
         raise TypeError("t must be instance of datetime or Tuple[datetime, datetime]")
 
     if isinstance(x, pd.DataFrame):
         df = x
-        idx = df.index
-        if not isinstance(idx, pd.DatetimeIndex):
-            if fstring is None:
-                raise ValueError(f"fstring must be specified when index is not instance of {pd.DatetimeIndex}.")
-            idx = pd.DatetimeIndex([ datetime.strptime(s, fstring) for s in idx ])
+
+        if column is not None:
+            idx = df[column]
+
+            if is_instance_list(idx, datetime):
+                idx = pd.DatetimeIndex(idx)
+            else:
+                if fstring is None:
+                    raise ValueError(f"fstring must be specified when specified column's element is not instance of {datetime}.")
+                idx = pd.DatetimeIndex([ datetime.strptime(s, fstring) for s in idx ])
+        else:
+            idx = df.index
+
+            if not isinstance(idx, pd.DatetimeIndex):
+                if fstring is None:
+                    raise ValueError(f"fstring must be specified when index is not instance of {pd.DatetimeIndex}.")
+                idx = pd.DatetimeIndex([ datetime.strptime(s, fstring) for s in idx ])
 
         if t is None:
             return df.copy()
         elif isinstance(t, datetime):
             return df[idx <= t].copy()
+        elif is_instance_list(t, datetime, n=1):
+            return df[(idx >= t[0])].copy()
         elif is_instance_list(t, datetime, n=2):
             return df[(idx >= t[0]) & (idx <= t[1])].copy()
         else:
@@ -165,8 +181,8 @@ def merge(df_prev: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
-def default_read_function(path: Union[str, Path]) -> pd.DataFrame:
-    return pd.read_csv(path, index_col=0, parse_dates=True)
+def default_read_function(path: Union[str, Path], parse_dates=True) -> pd.DataFrame:
+    return pd.read_csv(path, index_col=0, parse_dates=parse_dates)
 
 def default_merge_function(df_prev: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     return merge(df_prev, df)
@@ -186,12 +202,14 @@ def default_restore_function(paths: Iterable[Union[str, Path]]) -> pd.DataFrame:
     return df_ret.sort_index()
 
 def default_save_function(
-                df: pd.DataFrame,
-                dir_path: Union[str, Path],
-                save_iterator: Callable[[datetime, datetime], Iterable[Tuple[datetime, datetime]]],
-                save_fstring: str,
-                timestamp_filter: Callable[[datetime], bool]=None
-                ) -> Path:
+        df: pd.DataFrame,
+        dir_path: Union[str, Path],
+        save_iterator: Callable[[datetime, datetime], Iterable[Tuple[datetime, datetime]]],
+        save_fstring: str,
+        timestamp_filter: Callable[[datetime], bool]=None,
+        column: str=None,
+        parse_dates=True
+    ) -> Path:
     save_dir = Path(dir_path)
     save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -200,17 +218,22 @@ def default_save_function(
     
     df = df.sort_index()
 
+    if column is None:
+        idx = pd.Series(df.index)
+    else:
+        idx = df[column]
+
     # 期間ごとに小分けにしてイテレート
-    for begin, end in save_iterator(df.index[0], df.index[-1]):
+    for begin, end in save_iterator(idx.iloc[0], idx.iloc[-1]):
         save_name = begin.strftime(save_fstring)
         path = save_dir / save_name
         
         # 小分けにしたデータフレーム
-        df_part = df[(df.index >= begin) & (df.index < end)]
+        df_part = focus(df, (begin, end), column=column)
 
         # 過去に同期間が保存されていれば読み込んでマージ
         if path.exists():
-            df_prev = default_read_function(path)
+            df_prev = default_read_function(path, parse_dates)
             df_part = default_merge_function(df_prev, df_part)
         
         # 保存するデータを選択する
