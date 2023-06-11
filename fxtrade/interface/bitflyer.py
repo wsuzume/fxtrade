@@ -285,7 +285,7 @@ class BitflyerAPI(TraderAPI):
         
         return ask_rate
 
-    def buy(self, size, t=None, history=None):
+    def buy(self, size, t=None, wallet=None, history=None):
         try:
             response = order(self.api_key, self.api_secret, 'BUY', 'MARKET', 0, size)
             response.raise_for_status()
@@ -296,7 +296,7 @@ class BitflyerAPI(TraderAPI):
         
         return response.json()
     
-    def sell(self, size, t=None, history=None):
+    def sell(self, size, t=None, wallet=None, history=None):
         try:
             response = order(self.api_key, self.api_secret, 'SELL', 'MARKET', 0, size)
             response.raise_for_status()

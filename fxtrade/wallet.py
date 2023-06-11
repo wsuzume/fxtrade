@@ -83,6 +83,16 @@ class Wallet:
 
     def copy(self):
         return Wallet(self)
+    
+    def clear(self):
+        stocks = {}
+
+        for key, stock in self._stocks.items():
+            stocks[key] = Stock(stock.code, 0)
+        
+        self._stocks = stocks
+
+        return self
 
     def dump(self, f, indent=2, nest=1):
         tab = " " * indent * nest

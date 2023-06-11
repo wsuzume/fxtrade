@@ -122,7 +122,12 @@ class FX(SafeAttrABC):
 
         code_pair = CodePair(code, self.origin)
 
-        chart = Chart(chart_api, code_pair=code_pair, data_dir=chart_dir, crange_period=crange_period)
+        chart = Chart(
+            code_pair=code_pair,
+            api=chart_api,
+            data_dir=chart_dir,
+            crange_period=crange_period
+        )
 
         key = key if key is not None else code
         self._market[key] = Trader(
@@ -152,6 +157,11 @@ class FX(SafeAttrABC):
     def _list_data_dir(self):
         xs = sorted(glob.glob(str(self._data_dir / '*')))
         return [ Path(x).name for x in xs ]
+    
+    def clear(self):
+        for key in self.market.keys():
+            self.market[key].clear()
+        return self
 
     def create_emulator(self, name, data_dir=None, trader_src_dir=None, chart_src_dir=None):
         name = type_checked(name, str)
@@ -328,6 +338,18 @@ class FX(SafeAttrABC):
         for name, trader in self._market.items():
             ret[name] = trader.sync_chart(t=t, crange_period=crange_period, data_dir=data_dir, interval=interval, force=force)
         return ret
+
+    def save(self):
+        pass
+
+    def load(self):
+        pass
+
+    def update(self):
+        pass
+
+    def sync(self):
+        pass
 
 #     @property
 #     def history(self):

@@ -1,17 +1,19 @@
+import numpy as np
 import pandas as pd
 
 from io import StringIO
-from datetime import datetime
+from datetime import datetime, timedelta
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Iterable, Optional, Type, Union
 
 from .api import CodePair, TraderAPI
-from .chart import Chart
+from .chart import Chart, ChartEmulatorAPI
 from .wallet import Wallet
 from .trade import Trade
 from .history import History
-from .stock import Stock
+from .period import CRangePeriod
+from .stock import Stock, Rate
 from .stocks import JPY, BTC
 from .safeattr import SafeAttrABC, immutable, protected
 from .utils import default_save_iterator
@@ -56,6 +58,9 @@ class Trader(SafeAttrABC):
         f.write(f"{tab}wallet=")
         self.wallet.dump(f, indent=indent, nest=nest + 1)
         f.write(f",\n")
+        f.write(f"{tab}history=")
+        self.history.dump(f, indent=indent, nest=nest + 1)
+        f.write(f",\n")
         f.write(f"{tab}chart=")
         self.chart.dump(f, indent=indent, nest=nest + 1)
         f.write(f"\n")
@@ -67,9 +72,27 @@ class Trader(SafeAttrABC):
             ret = f.getvalue()
         return ret
     
+    def clear(self):
+        self.wallet.clear()
+        self.history.clear()
+        self.chart.clear()
+
+        return self
+
     def create_emulator(self, trader_data_dir, chart_data_dir, trader_src_dir, chart_src_dir):
-        trader_api = TraderEmulatorAPI(api=self.api, source_dir=trader_src_dir)
         chart = self.chart.create_emulator(data_dir=chart_data_dir, source_dir=chart_src_dir)
+
+        chart_for_trader_api = Chart(
+            code_pair=self.code_pair,
+            api=self.chart.api.freeze(),
+            data_dir=chart_src_dir
+        )
+
+        trader_api = TraderEmulatorAPI(
+            api=self.api,
+            chart=chart_for_trader_api,
+            source_dir=trader_src_dir
+        )
 
         return Trader(
             api=trader_api,
@@ -187,7 +210,7 @@ class Trader(SafeAttrABC):
         if x > maximum:
             raise ValueError(f'{x} is over maximum order quantity {maximum}.')
         
-        return self.api.buy(float(x.q), t=t, history=self.history)
+        return self.api.buy(float(x.q), t=t, wallet=self.wallet, history=self.history)
     
     def sell(self, x: Union[Stock, Trade], t=None, *, permit=False) -> Any:
         """
@@ -213,7 +236,7 @@ class Trader(SafeAttrABC):
         if x > maximum:
             raise ValueError(f'{x} is over maximum order quantity {maximum}.')
             
-        return self.api.sell(float(x.q), t=t, history=self.history)
+        return self.api.sell(float(x.q), t=t, wallet=self.wallet, history=self.history)
 
     @property
     def wallet_dir(self):
@@ -309,6 +332,18 @@ class Trader(SafeAttrABC):
 
     def sync_history(self, t=None):
         return self.update_history(t)
+    
+    def save(self):
+        return
+    
+    def load(self):
+        return
+
+    def update(self):
+        return
+    
+    def sync(self):
+        return
 
 class TraderDummyAPI(TraderAPI):
     def __init__(self):
@@ -336,10 +371,13 @@ class TraderDummyAPI(TraderAPI):
         return Wallet({'JPY': 0, 'BTC': 0})
 
 class TraderEmulatorAPI(TraderAPI):
-    def __init__(self, api, source_dir=None):
+    def __init__(self, api, chart, source_dir):
         self._api = api.freeze()
+        self._chart = chart
         self._source_dir = Path(source_dir)
-    
+
+        self._id = 0
+
     def __repr__(self):
         return f"TraderEmulatorAPI(api={self._api.__class__.__name__}, source_dir='{self._source_dir}')"
 
@@ -351,6 +389,9 @@ class TraderEmulatorAPI(TraderAPI):
 #         self.history = trader.history.copy()
 #         self.chart = chart
 #         self.data_dir = Path(data_dir)
+
+    def get_commission(self, code_pair=None):
+        return Fraction(3, 2000)
 
     def minimum_order_quantity(self, code, t=None):
         return self._api.minimum_order_quantity(code, t)
@@ -388,14 +429,69 @@ class TraderEmulatorAPI(TraderAPI):
 #     def get_history(self, start_date=None, t=None):
 #         return self.history
     
-    def buy(self, x, t=None, history=None):
+    def buy(self, x, t=None, wallet=None, history=None):
         # この中に History に取引記録を追加する処理を書く
         if t is None:
             raise ValueError(f"t must be specified.")
-        print(history)
-        return f"Buy({x})", t
 
-    def sell(self, x, t=None, history=None):
+        df = self._chart[CRangePeriod('max', '15m')].read(t=(t - timedelta(hours=1), t))
+
+        chart = df[df.index == t].iloc[0]
+        high, low = chart[['high', 'low']]
+
+        virtual_price = np.round(np.random.uniform(low, high))
+
+        r = Rate(from_code='BTC', to_code='JPY', r=str(virtual_price))
+
+        base = Stock('BTC', x)
+        quote = base * r
+
+        base = base * (1 - self.get_commission())
+
+        trade = Trade(quote, base, t=t, id=self._id)
+
+        self._id += 1
+
+        if quote > wallet['JPY']:
+            raise ValueError("okane tarinai")
+
+        wallet['BTC'] += base
+        wallet['JPY'] -= quote
+
+        if history is not None:
+            history.add(trade)
+
+        return trade
+
+    def sell(self, x, t=None, wallet=None, history=None):
         if t is None:
             raise ValueError(f"t must be specified.")
-        return f"Sell({x})", t
+        
+        df = self._chart[CRangePeriod('max', '15m')].read(t=(t - timedelta(hours=1), t))
+
+        chart = df[df.index == t].iloc[0]
+        high, low = chart[['high', 'low']]
+
+        virtual_price = np.round(np.random.uniform(low, high))
+
+        r = Rate(from_code='BTC', to_code='JPY', r=str(virtual_price))
+
+        base = Stock('BTC', x)
+        quote = base * r
+
+        base = base * (1 + self.get_commission())
+
+        trade = Trade(base, quote, t=t, id=self._id)
+
+        self._id += 1
+
+        if base > wallet['BTC']:
+            raise ValueError("okane tarinai")
+
+        wallet['BTC'] -= base
+        wallet['JPY'] += quote
+
+        if history is not None:
+            history.add(trade)
+
+        return trade

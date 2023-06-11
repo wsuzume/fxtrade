@@ -44,17 +44,28 @@ def normalize(df: pd.DataFrame, dt: timedelta):
 
     return df
 
-def focus(x, t, fstring=None, column=None):
+def focus(x, t, fstring=None, column=None, include_end=True):
     def _focus(s, t):
         if t is None:
             return True
         elif isinstance(t, datetime):
-            return s <= t
+            return s <= t if include_end else s < t
         elif is_instance_list(t, datetime, n=1):
             return s >= t[0]
         elif is_instance_list(t, datetime, n=2):
-            return t[0] <= s <= t[1]
+            return (t[0] <= s <= t[1]) if include_end else (t[0] <= s < t[1])
         raise TypeError("t must be instance of datetime or Tuple[datetime, datetime]")
+    
+    def _apply_format(t, fstring):
+        return datetime.strptime(t.strftime(fstring), fstring)
+
+    if fstring is not None:
+        if isinstance(t, datetime):
+            t = _apply_format(t, fstring)
+        elif is_instance_list(t, datetime, n=1):
+            t = (_apply_format(t[0], fstring), )
+        elif is_instance_list(t, datetime, n=2):
+            t = (_apply_format(t[0], fstring), _apply_format(t[1], fstring))
 
     if isinstance(x, pd.DataFrame):
         df = x
@@ -79,11 +90,12 @@ def focus(x, t, fstring=None, column=None):
         if t is None:
             return df.copy()
         elif isinstance(t, datetime):
-            return df[idx <= t].copy()
+            return df[idx <= t].copy() if include_end else df[idx <= t].copy()
         elif is_instance_list(t, datetime, n=1):
             return df[(idx >= t[0])].copy()
         elif is_instance_list(t, datetime, n=2):
-            return df[(idx >= t[0]) & (idx <= t[1])].copy()
+            return df[(idx >= t[0]) & (idx <= t[1])].copy() if include_end \
+                else df[(idx >= t[0]) & (idx < t[1])].copy()
         else:
             raise TypeError()
 
@@ -155,7 +167,9 @@ def default_save_iterator(period: Period):
             Period('1m'): day_sections,
     }[period]
 
-def merge(df_prev: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
+def merge(df_prev: pd.DataFrame, df: pd.DataFrame, left_on=None, right_on=None, sort_on=None) -> pd.DataFrame:
+    # TODO: 結合のキーにする列を指定できるようにする
+
     if len(df_prev) == 0:
         return df
     
@@ -184,10 +198,13 @@ def merge(df_prev: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
 def default_read_function(path: Union[str, Path], parse_dates=True) -> pd.DataFrame:
     return pd.read_csv(path, index_col=0, parse_dates=parse_dates)
 
+def default_write_function(df: pd.DataFrame, path: Union[str, Path]):
+    return df.to_csv(path, index=True)
+
 def default_merge_function(df_prev: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
     return merge(df_prev, df)
 
-def default_glob_function(dir_path: Union[str, Path]) -> List[str]:
+def default_glob_function(dir_path: Union[str, Path]) -> List[Path]:
     return sorted(Path(dir_path).glob('*.csv'))
 
 def default_restore_function(paths: Iterable[Union[str, Path]]) -> pd.DataFrame:
@@ -229,7 +246,7 @@ def default_save_function(
         path = save_dir / save_name
         
         # 小分けにしたデータフレーム
-        df_part = focus(df, (begin, end), column=column)
+        df_part = focus(df, (begin, end), column=column, include_end=False)
 
         # 過去に同期間が保存されていれば読み込んでマージ
         if path.exists():

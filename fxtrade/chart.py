@@ -169,9 +169,9 @@ class Board(SafeAttrABC):
         self._df = focus(self.df, t)
         return self.df
 
-    def flush(self):
+    def clear(self):
         self._df = self.api.empty
-        return self.df
+        return self
 
     def save(self, data_dir=None, save_function=None):
         data_dir = self.arg_data_dir(data_dir)
@@ -206,7 +206,7 @@ class Board(SafeAttrABC):
         if len(paths) == 0:
             raise FileNotFoundError(f"No file to read in '{read_dir}'")
 
-        paths = focus(paths, t, fstring=save_fstring)
+        paths = focus(paths, t, fstring=save_fstring, include_end=True)
         if len(paths) == 0:
             raise FileNotFoundError(f"No files remained after applying filter.")
 
@@ -353,13 +353,13 @@ class Chart(SafeAttrABC):
         raise TypeError(f"crange_period must be instance of {str}, {CRangePeriod}, {Iterable[Union[str, CRangePeriod]]}, or {Mapping[str, Union[str, CRangePeriod, EllipsisType]]}.")
 
     def __init__(self,
-                 api: Type[ChartAPI],
                  code_pair: CodePair,
-                 data_dir: Union[str, Path],
+                 api: Type[ChartAPI]=None,
+                 data_dir: Union[str, Path]=None,
                  crange_period: Union[CRangePeriod, Iterable[CRangePeriod]]=None
                 ):
-        self.api = immutable(api, ChartAPI)
         self.code_pair = self._to_code_pair(code_pair)
+        self.api = immutable(api, ChartAPI, optional=True)
         self.data_dir = immutable(data_dir, Path, f=Path, optional=True)
         self.board = {}
 
@@ -408,8 +408,8 @@ class Chart(SafeAttrABC):
         chart_api = ChartEmulatorAPI(api=self.api, source_dir=source_dir, on_memory=on_memory)
         
         return Chart(
-            api=chart_api,
             code_pair=self.code_pair,
+            api=chart_api,
             data_dir=data_dir,
             crange_period=self.crange_period,
         )
@@ -433,7 +433,10 @@ class Chart(SafeAttrABC):
             raise ValueError(f"invalid crange_period: '{crange_period}'")
         
         if data_dir is None:
-            data_dir = self.data_dir / self.code_pair.short / crange_period.short
+            if self.data_dir is None:
+                data_dir = None
+            else:
+                data_dir = self.data_dir / self.code_pair.short / crange_period.short
 
         self.board[name] = \
             Board(
@@ -464,10 +467,14 @@ class Chart(SafeAttrABC):
 #     def dfs(self):
 #         return { k: v.df for k, v in self.board.items() }
     
-    def flush(self, crange_period: Union[str, Iterable[str]]=None):
-        for key in self._to_crange_interval_list(crange_period):
-            board = self.board[key]
-            board.flush()
+    def clear(self, crange_period: Union[str, Iterable[str]]=None):
+        if crange_period is None:
+            crange_period = list(self.board.keys())
+        else:
+            crange_period = self._make_crange_period_list(crange_period)
+
+        for key in crange_period:
+            self.board[key].clear()
 
         return self
 

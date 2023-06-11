@@ -6,12 +6,13 @@ import pandas as pd
 from fractions import Fraction
 from pathlib import Path
 from typing import Optional, Union, Iterable, List
+from io import StringIO
 
 from .core import is_instance_list
 from .trade import Trade, TradePair
 from .safeattr import SafeAttrABC, immutable, protected
 from .timeseries import month_sections
-from .utils import focus, default_save_function
+from .utils import focus, default_read_function, default_write_function, default_save_function
 
 class History(SafeAttrABC):
     """
@@ -57,8 +58,7 @@ class History(SafeAttrABC):
     
     @classmethod
     def read_csv(cls, path: Union[str, Path]) -> pd.DataFrame:
-        path = Path(path)
-        df = pd.read_csv(path, index_col=0, parse_dates=['t'])
+        df = default_read_function(path, parse_dates=['t'])
         return cls.normalize(df)
     
     @classmethod
@@ -86,7 +86,37 @@ class History(SafeAttrABC):
             self.add(trade)
     
     def __repr__(self):
-        return f"History(N={len(self.df)})"
+        return self.dumps()
+    
+    def dump(self, f, indent=2, nest=1):
+        tab = " " * indent * nest
+        last_tab = " " * (indent * (nest - 1))
+        if self.n_trades == 0:
+            f.write(f"History(n_trades={self.n_trades})")
+        else:
+            f.write(f"History(\n")
+            f.write(f"{tab}n_trades={self.n_trades},\n")
+            f.write(f"{tab}first_timestamp={self.first_timestamp},\n")
+            f.write(f"{tab}last_timestamp={self.last_timestamp}\n")
+            f.write(f"{last_tab})")
+    
+    def dumps(self, indent=4):
+        with StringIO() as f:
+            self.dump(f, indent=indent)
+            ret = f.getvalue()
+        return ret
+
+    @property
+    def n_trades(self):
+        return len(self.df)
+
+    @property
+    def first_timestamp(self):
+        return self.df['t'].min()
+    
+    @property
+    def last_timestamp(self):
+        return self.df['t'].max()
 
     def clear(self):
         self._df = self.empty()
@@ -100,9 +130,7 @@ class History(SafeAttrABC):
         return History(self)
 
     def to_csv(self, path: Union[str, Path]):
-        path = Path(path)
-        
-        return self.df.to_csv(path, index=True)
+        return default_write_function(self.df, path)
 
     def __getitem__(self, idx):
         return Trade.from_series(self.df.loc[idx])
@@ -155,7 +183,7 @@ class History(SafeAttrABC):
             parse_dates=['t']
         )
         
-    def read(self, data_dir: Union[str, Path]) -> pd.DataFrame:
+    def read(self, data_dir: Union[str, Path], t=None) -> pd.DataFrame:
         data_dir = Path(data_dir)
         dfs = []
         for path in data_dir.glob('*.csv'):
@@ -163,7 +191,7 @@ class History(SafeAttrABC):
         
         return pd.concat(dfs, axis=0).sort_values('t')
     
-    def load(self, data_dir: Union[str, Path]) -> pd.DataFrame:
+    def load(self, data_dir: Union[str, Path], t=None) -> pd.DataFrame:
         self._df = self.read(data_dir=data_dir)
         return self.df
     
