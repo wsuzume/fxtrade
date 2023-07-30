@@ -1,11 +1,13 @@
 import math
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 
 from datetime import datetime
 from fractions import Fraction
 
 from ..fx import FX
-from ..analysis import analyze, estimate_probability, geomeans
+from ..analysis import analyze, estimate_probability, emaverage, infinite_trade_result, sell_buy_timing_ratio, switch_count
 from ..stock import Rate
 from ..trade import Trade
 
@@ -16,11 +18,11 @@ def calc_zpc(xs, dt, alphas=None):
     ps = []
     cs = []
     for a in alphas:
-        gmeans = geomeans(xs, alpha=a, dt=dt)
+        gmeans = emaverage(xs, alpha=a, dt=dt)
 
         zs.append(infinite_trade_result(xs, gmeans))
-        ps.append(over_under_ratio(xs, gmeans))
-        cs.append(straddle_count(xs, gmeans))
+        ps.append(sell_buy_timing_ratio(xs, gmeans))
+        cs.append(switch_count(xs, gmeans))
 
     zs = np.array(zs)
     ps = np.array(ps)
@@ -60,8 +62,8 @@ class Tenet:
         rise = prob[(dif > 0) & (prob < 0.4)]
         fall = prob[(dif < 0) & (prob < 0.2)]
         
-        gmeans = geomeans(df['log'], alpha=self.alpha, dt=self.dt)
-        trend = geomeans(gmeans.diff(), alpha=self.alpha, dt=self.dt)
+        gmeans = emaverage(df['log'], alpha=self.alpha, dt=self.dt)
+        trend = emaverage(gmeans.diff(), alpha=self.alpha, dt=self.dt)
         
         gm = gmeans.loc[trend.index]
         uptrend = gm.loc[(((trend > 0).astype(float)).diff() > 0).values]
@@ -91,7 +93,6 @@ class Tenet:
         # last trade was SELL
         trade = fx.get_max_available()
         return trade % 4
-        
     
     def decide_to_sell(self, fx):
         return fx.get_max_salable()

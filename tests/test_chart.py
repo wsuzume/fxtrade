@@ -36,11 +36,12 @@ def test_Board_dummy():
     assert board.interval is None
 
 def test_Chart_make_crange_period_list():
-    chart = Chart(api=ChartDummyAPI(),
-                code_pair=CodePair('BTC', 'JPY'),
-                data_dir='../data/chart',
-                crange_period=[],
-            )
+    chart = Chart(
+        code_pair=CodePair('BTC', 'JPY'),
+        api=ChartDummyAPI(),
+        data_dir='../data/chart',
+        crange_period=[],
+    )
     
 
     xs = chart._make_crange_period_list('max-15m')
@@ -60,11 +61,12 @@ def test_Chart_make_crange_period_list():
         chart._make_crange_period_list([3.14])
 
 def test_Chart_make_crange_period_dict():
-    chart = Chart(api=ChartDummyAPI(),
-                code_pair=CodePair('BTC', 'JPY'),
-                data_dir='../data/chart',
-                crange_period=[],
-            )
+    chart = Chart(
+        code_pair=CodePair('BTC', 'JPY'),
+        api=ChartDummyAPI(),
+        data_dir='../data/chart',
+        crange_period=[],
+    )
     
     assert 'max-15m' in chart._make_crange_period_dict('max-15m')
     assert CRangePeriod('max', '15m') in chart._make_crange_period_dict(CRangePeriod('max', '15m'))
@@ -105,11 +107,12 @@ def test_Chart_make_crange_period_dict():
         })
 
 def test_Chart_dummy():
-    chart = Chart(api=ChartDummyAPI(),
-                code_pair=CodePair('BTC', 'JPY'),
-                data_dir='../data/chart',
-                crange_period=[CRangePeriod('max', '15m')],
-            )
+    chart = Chart(
+        code_pair=CodePair('BTC', 'JPY'),
+        api=ChartDummyAPI(),
+        data_dir='../data/chart',
+        crange_period=[CRangePeriod('max', '15m')],
+    )
     
     assert chart.dumps() == \
         "Chart(api=ChartDummyAPI(),\n" + \

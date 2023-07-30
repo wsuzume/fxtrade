@@ -9,7 +9,7 @@ import numpy as np
 from fractions import Fraction
 from typing import Any, Union, Optional
 
-_FLOAT_PRECISE_DIGIT_NUMBER = 6
+_FLOAT_PRECISE_DIGIT_NUMBER = 10
 
 Numeric = Union[int, str, float, Fraction]
 
@@ -37,7 +37,7 @@ def as_numeric(x: Any):
     if x is None:
         return None
     if not can_be_precise_num(x):
-        raise TypeError("x must be type of str, int, float, or fractions.Fraction")
+        raise TypeError(f"x must be type of str, int, float, or fractions.Fraction but actual type '{type(x)}'.")
     
     x = x if not isinstance(x, float) else str(x)
 
@@ -104,7 +104,7 @@ class Stock:
         return Stock(self.code, str(math.ceil(float(self.q) * p) / p))
     
     def __repr__(self):
-        return f"Stock({self.code}, {self.q})"
+        return f"Stock({self.code}, {float(self.q)})"
     
     def _is_same_stock(self, other):
         if not isinstance(other, Stock):

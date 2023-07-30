@@ -1,5 +1,7 @@
 import json
 import glob
+import numpy as np
+import pandas as pd
 
 from datetime import datetime
 from io import StringIO
@@ -351,12 +353,55 @@ class FX(SafeAttrABC):
     def sync(self):
         pass
 
-#     @property
-#     def history(self):
-#         hist = {}
-#         for key, trader in self._market.items():
-#             hist[key] = trader.history
-#         return hist
+    def apply(self, function, t=None):
+        return function(self, t)
+    
+    def back_test(self, function, t, dt):
+        begin, end = t
+
+        ts = np.arange(begin, end+dt, dt).astype(datetime)
+
+        wallet_hist = pd.DataFrame(columns=['JPY', 'BTC', 'r'])
+        
+        for t in ts:
+            trade = self.apply(function, t)
+            if trade is not None:
+                print(self.wallet)
+                print(trade)
+                if trade.x.code == 'JPY':
+                    self['BTC'].buy(trade, t=t, permit=True)
+
+                    wallet_hist.loc[t] = (
+                        float(self.wallet['JPY'].q),
+                        float(self.wallet['BTC'].q),
+                        1 / float(trade.rate.r)
+                    )
+                else:
+                    self['BTC'].sell(trade, t=t, permit=True)
+
+                    wallet_hist.loc[t] = (
+                        float(self.wallet['JPY'].q),
+                        float(self.wallet['BTC'].q),
+                        float(trade.rate.r)
+                    )
+                print(self.wallet)
+                
+
+        return self.history, wallet_hist
+
+    # def execute(self, function):
+    #     t = datetime.now()
+        
+    #     trade = self.apply(function, t)
+        
+    #     return self.order(trade)
+
+    @property
+    def history(self):
+        hist = {}
+        for key, trader in self.market.items():
+            hist[key] = trader.history
+        return hist
     
 #     def get_history(self, start_date=None):
 #         hist = {}
@@ -386,12 +431,6 @@ class FX(SafeAttrABC):
 #             trader.load_chart()
 #         return self
     
-    
-#     def get_last_trade(self, code):
-#         last_trade = self[code].get_history(start_date=datetime(2022, 2, 1)).df.iloc[0]
-        
-#         return Trade.from_series(last_trade)
-    
 #     def buy(self, trade, code=None):
 #         if code is None:
 #             code = trade.y.code
@@ -402,8 +441,6 @@ class FX(SafeAttrABC):
 #             code = trade.x.code
 #         return self[code].sell(trade)
     
-#     def apply(self, function, t=None):
-#         return function(self, t)
     
 #     def back_test(self, function, ts):
 #         for t in ts:
@@ -429,9 +466,3 @@ class FX(SafeAttrABC):
         
     #     raise TypeError(f"{type(trade)} trade is not supported")
             
-    # def execute(self, function):
-    #     t = datetime.now()
-        
-    #     trade = self.apply(function, t)
-        
-    #     return self.order(trade)

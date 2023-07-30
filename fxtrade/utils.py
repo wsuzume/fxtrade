@@ -48,13 +48,13 @@ def focus(x, t, fstring=None, column=None, include_end=True):
     def _focus(s, t):
         if t is None:
             return True
-        elif isinstance(t, datetime):
+        elif isinstance(t, (datetime, np.datetime64)):
             return s <= t if include_end else s < t
-        elif is_instance_list(t, datetime, n=1):
+        elif is_instance_list(t, (datetime, np.datetime64), n=1):
             return s >= t[0]
-        elif is_instance_list(t, datetime, n=2):
+        elif is_instance_list(t, (datetime, np.datetime64), n=2):
             return (t[0] <= s <= t[1]) if include_end else (t[0] <= s < t[1])
-        raise TypeError("t must be instance of datetime or Tuple[datetime, datetime]")
+        raise TypeError(f"t must be instance of datetime or Tuple[datetime, datetime] but actual type '{type(t)}'.")
     
     def _apply_format(t, fstring):
         return datetime.strptime(t.strftime(fstring), fstring)
@@ -89,11 +89,11 @@ def focus(x, t, fstring=None, column=None, include_end=True):
 
         if t is None:
             return df.copy()
-        elif isinstance(t, datetime):
+        elif isinstance(t, (datetime, np.datetime64)):
             return df[idx <= t].copy() if include_end else df[idx <= t].copy()
-        elif is_instance_list(t, datetime, n=1):
+        elif is_instance_list(t, (datetime, np.datetime64), n=1):
             return df[(idx >= t[0])].copy()
-        elif is_instance_list(t, datetime, n=2):
+        elif is_instance_list(t, (datetime, np.datetime64), n=2):
             return df[(idx >= t[0]) & (idx <= t[1])].copy() if include_end \
                 else df[(idx >= t[0]) & (idx < t[1])].copy()
         else:

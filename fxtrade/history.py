@@ -107,6 +107,14 @@ class History(SafeAttrABC):
         return ret
 
     @property
+    def df_float(self):
+        df = self.df.copy()
+
+        df.loc[:, ['X(t)', 'Y(t+dt)', 'R(yt/xt)']] = df.loc[:, ['X(t)', 'Y(t+dt)', 'R(yt/xt)']].applymap(float)
+
+        return df
+
+    @property
     def n_trades(self):
         return len(self.df)
 
@@ -133,7 +141,9 @@ class History(SafeAttrABC):
         return default_write_function(self.df, path)
 
     def __getitem__(self, idx):
-        return Trade.from_series(self.df.loc[idx])
+        if len(self.df) == 0:
+            return None
+        return Trade.from_series(self.df.iloc[idx])
     
     def add(self, trade: Optional[Union[Trade, Iterable[Trade], pd.DataFrame, History]]) -> History:
         """
@@ -209,7 +219,7 @@ class History(SafeAttrABC):
     
     def get_pair_trade_index(self, trade: Trade, ascending: bool=True):
         """
-        Return the index of previous trades that should be paired with the trade.
+        Return the index of previous trades that should be paired with given trade.
         """
         df = self._df[(self._df['from'] == trade.y.code) & (self._df['to'] == trade.x.code)]
         df = df[df['t'] <= trade.t].sort_values(by='R(yt/xt)', ascending=ascending)
@@ -321,8 +331,8 @@ class History(SafeAttrABC):
                 pos = History(hist._df[pos_idx])
                 
                 desc = pos.describe(code_X, code_Y)
-                desc['used'] = rep['X(s)'].sum()
-                desc['earned'] = rep['Z(t+dt)'].sum()
+                desc['used'] = float(rep['X(s)'].sum())
+                desc['earned'] = float(rep['Z(t+dt)'].sum())
 
                 ret.append(desc)
         

@@ -158,6 +158,11 @@ class Trade:
     def as_series(self) -> pd.Series:
         """Convert to pandas.Series.
         """
+
+        # r = self.rate
+        # if not isinstance(r, Rate):
+        #     r = np.nan
+
         xs = [
             self.t, self.id,
             self.x.code, self.x.q,

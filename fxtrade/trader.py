@@ -144,25 +144,25 @@ class Trader(SafeAttrABC):
         """
         return self.api.get_commission(self.code_pair)
     
-    def get_best_bid(self):
+    def get_best_bid(self, t=None):
         """
         最低買値
         """
-        return self.api.get_best_bid(self.code_pair)
+        return self.api.get_best_bid(self.code_pair, t=t)
     
-    def get_best_ask(self):
+    def get_best_ask(self, t=None):
         """
         最高売値
         """
-        return self.api.get_best_ask(self.code_pair)
+        return self.api.get_best_ask(self.code_pair, t=t)
     
-    def get_max_available(self):
+    def get_max_available(self, t=None) -> Trade:
         """
         買い注文可能な最大量。Bitflyer の場合、実際に取引後に手に入るのはここから手数料を引いた量。
         """
 
         # 買い値
-        bid_rate = self.get_best_bid()
+        bid_rate = self.get_best_bid(t=t)
         
         init = self.wallet[self.code_pair.quote]
 
@@ -171,14 +171,14 @@ class Trader(SafeAttrABC):
 
         return Trade(init, term, t=None)
     
-    def get_max_salable(self):
+    def get_max_salable(self, t=None) -> Trade:
         """
         売り注文可能な最大量。Bitflyer の場合、この額からさらに手数料が引かれる。
         """
         commission = self.get_commission()
 
         # 売り値
-        ask_rate = self.get_best_ask()
+        ask_rate = self.get_best_ask(t=t)
 
         term = (self.wallet[self.code_pair.base] * (1 - commission)).floor()
         init = (term * ask_rate).ceil()
@@ -332,7 +332,10 @@ class Trader(SafeAttrABC):
 
     def sync_history(self, t=None):
         return self.update_history(t)
-    
+       
+    def get_last_trade(self):
+        return self.history[-1]
+
     def save(self):
         return
     
@@ -418,9 +421,27 @@ class TraderEmulatorAPI(TraderAPI):
 #             'best_ask': ret['low'],
 #         }
     
-#     def get_best_bid(self, code, t=None):
-#         ret = self.chart.download('1mo-15m', t=t)['1mo-15m'].iloc[-1]
-#         return ret['high']
+    def get_best_bid(self, code, t=None):
+        if t is None:
+            raise ValueError(f"t must be specified.")
+
+        df = self._chart[CRangePeriod('max', '15m')].read(t=(t - timedelta(hours=1), t))
+
+        chart = df[df.index == t].iloc[0]
+        high, _ = chart[['high', 'low']]
+
+        return Rate(from_code='BTC', to_code='JPY', r=high)
+    
+    def get_best_ask(self, code, t=None):
+        if t is None:
+            raise ValueError(f"t must be specified.")
+
+        df = self._chart[CRangePeriod('max', '15m')].read(t=(t - timedelta(hours=1), t))
+
+        chart = df[df.index == t].iloc[0]
+        _, low = chart[['high', 'low']]
+
+        return Rate(from_code='BTC', to_code='JPY', r=low)
     
 #     def get_best_ask(self, code, t=None):
 #         ret = self.chart.download('1mo-15m', t=t)['1mo-15m'].iloc[-1]
@@ -458,6 +479,9 @@ class TraderEmulatorAPI(TraderAPI):
         wallet['BTC'] += base
         wallet['JPY'] -= quote
 
+        wallet['JPY'] = wallet['JPY'].floor(0)
+        wallet['BTC'] = wallet['BTC'].floor(8)
+
         if history is not None:
             history.add(trade)
 
@@ -490,6 +514,9 @@ class TraderEmulatorAPI(TraderAPI):
 
         wallet['BTC'] -= base
         wallet['JPY'] += quote
+
+        wallet['JPY'] = wallet['JPY'].floor(0)
+        wallet['BTC'] = wallet['BTC'].floor(8)
 
         if history is not None:
             history.add(trade)
