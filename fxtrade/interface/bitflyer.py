@@ -300,6 +300,32 @@ def get_executions_backward(
     return ret
 
 
+def extract_executions_from_responses(responses: list[requests.Response]):
+    if len(responses) == 0:
+        # max_iter が 0 のケース
+        # エラーにしてもよいが、挙動としては正常といえる。
+        return []
+
+    if responses[0].status_code != requests.codes.ok:
+        # １回目のリクエストが失敗しているなら指定の仕方が悪い可能性が高いのでエラー
+        responses[0].raise_for_status()
+    if responses[-1].status_code == requests.codes.bad_request:
+        # １回目のリクエストが成功していて、それよりも後の末尾が 400 bad_request の場合、
+        # 取得中に取得限界（30日前まで）に達した可能性が高い。
+        # この場合は末尾のみ取り除けば残りは正常。
+        responses.pop(-1)
+    elif responses[-1].status_code != requests.codes.ok:
+        # 200 ok か 400 bad_request 以外で終端している場合は、
+        # 予期せぬエラーである可能性が高い。
+        responses[-1].raise_for_status()
+
+    exec_list = []
+    for response in responses:
+        exec_list.extend(response.json())
+
+    return exec_list
+
+
 class Execution(BaseModel):
     id: int
     side: str
@@ -344,27 +370,7 @@ class Execution(BaseModel):
             sleep=sleep,
         )
 
-        if len(responses) == 0:
-            # max_iter が 0 のケース
-            # エラーにしてもよいが、挙動としては正常といえる。
-            return []
-
-        if responses[0].status_code != requests.codes.ok:
-            # １回目のリクエストが失敗しているなら指定の仕方が悪い可能性が高いのでエラー
-            responses[0].raise_for_status()
-        if responses[-1].status_code == requests.codes.bad_request:
-            # １回目のリクエストが成功していて、それよりも後の末尾が 400 bad_request の場合、
-            # 取得中に取得限界（30日前まで）に達した可能性が高い。
-            # この場合は末尾のみ取り除けば残りは正常。
-            responses.pop(-1)
-        elif responses[-1].status_code != requests.codes.ok:
-            # 200 ok か 400 bad_request 以外で終端している場合は、
-            # 予期せぬエラーである可能性が高い。
-            responses[-1].raise_for_status()
-
-        exec_list = []
-        for response in responses:
-            exec_list.extend(response.json())
+        exec_list = extract_executions_from_responses(responses)
 
         return [
             Execution(**execution)
