@@ -1,20 +1,63 @@
 import pytest
+from pprint import pprint
 
-from requests.exceptions import HTTPError
+from fxtrade.interface.bitflyer import *
 
-from fxtrade.code import CodePair
-from fxtrade.stock import Stock
-from fxtrade.interface.bitflyer import BitflyerAPI
+def test_get_markets():
+    response = get_markets()
+    response.raise_for_status()
 
-def test_BitflyerAPI():
-    api = BitflyerAPI(api_key='xxxx', api_secret='xxxx')
+def test_Market_get():
+    markets = Market.get()
+    for m in markets:
+        assert isinstance(m, Market)
 
-    assert api.make_code_pair_string('BTC', 'JPY') == 'BTC_JPY'
-    assert api.make_code_pair_string(CodePair('BTC', 'JPY')) == 'BTC_JPY'
+def test_get_ticker():
+    response = get_ticker(product_code='BTC_JPY')
+    response.raise_for_status()
 
-    assert api.minimum_order_quantity(CodePair('BTC', 'JPY')) == Stock('BTC', '0.001')
-    assert api.maximum_order_quantity(CodePair('BTC', 'JPY')) == Stock('BTC', '1000')
+def test_Ticker_get():
+    ticker = Ticker.get()
+    assert isinstance(ticker, Ticker)
 
-    # ネットワークに接続した状態で実施する
-    with pytest.raises(HTTPError):
-        api.download_wallet()
+def test_get_board():
+    response = get_board(product_code='BTC_JPY')
+    response.raise_for_status()
+
+def test_Board_get():
+    board = Board.get()
+    assert isinstance(board, Board)
+
+def test_get_boardstate():
+    response = get_boardstate()
+    response.raise_for_status()
+
+def test_BoardState_get():
+    bs = BoardState.get()
+    assert isinstance(bs, BoardState)
+
+def test_get_executions():
+    response = get_executions()
+    response.raise_for_status()
+
+def test_Execution_get():
+    executions = Execution.get()
+    for exec in executions:
+        assert isinstance(exec, Execution)
+
+def test_get_coporateleverage():
+    response = get_corporateleverage()
+    response.raise_for_status()
+
+def test_CorporateLeverage_get():
+    cl = CorporateLeverage.get()
+    assert isinstance(cl, CorporateLeverage)
+
+def test_get_chats():
+    response = get_chats()
+    response.raise_for_status()
+
+def test_Chat_get():
+    chats = Chat.get()
+    for chat in chats:
+        assert isinstance(chat, Chat)

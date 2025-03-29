@@ -6,14 +6,7 @@ authors = ["wsuzume <joshnobus@gmail.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.8"
-numpy = "^1.23.1"
-pandas = "^1.4.3"
-scipy = "^1.5.4"
-plotly = "^5.7.0"
-pytest = "^7.1.2"
-
-[tool.poetry.dev-dependencies]
+python = "^3.11"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
