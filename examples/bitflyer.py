@@ -155,7 +155,7 @@ def market_sell():
     print(response)
 
 if __name__ == '__main__':
-    # public_api_example()
+    public_api_example()
     # private_api_example()
 
     ### 実際に取引が行われるので注意！！
