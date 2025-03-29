@@ -58,7 +58,7 @@ indent-width = 4
 [tool.ruff.lint]
 # Pyflakes（`F`）とpycodestyle（`E`）の一部（E4, E7, E9）を有効化
 # Ruffでは、pycodestyleの警告（`W`）やMcCabeの複雑度（`C901`）はデフォルトで無効
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "I"]
 ignore = []
 
 # `--fix`が指定された場合、すべてのルールに対して自動修正を許可

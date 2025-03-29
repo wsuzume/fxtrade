@@ -26,13 +26,13 @@ from pprint import pprint
 
 # Public API
 from fxtrade.interface.bitflyer import (
-    Market,
     Board,
     BoardState,
-    Ticker,
-    Execution,
-    CorporateLeverage,
     Chat,
+    CorporateLeverage,
+    Execution,
+    Market,
+    Ticker,
 )
 
 
@@ -63,10 +63,10 @@ def public_api_example():
 
 # Private API
 from fxtrade.interface.bitflyer import (
-    Permissions,
-    TradingCommission,
     Balance,
     BalanceHistory,
+    Permissions,
+    TradingCommission,
 )
 
 
@@ -96,8 +96,8 @@ def private_api_example():
 
 
 # 実際に注文する
-from fxtrade.math import floor
 from fxtrade.interface.bitflyer import ChildOrder
+from fxtrade.math import floor
 
 
 def limit_buy():
