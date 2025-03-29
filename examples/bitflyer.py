@@ -134,8 +134,8 @@ def market_sell():
     assert m + m * r <= M
 
     print('Max available:', M)
-    print('Max sell', m)
-    print('Max sell + commission', m + m * r)
+    print('Max salable', m)
+    print('Max salable + commission', m + m * r)
 
     order = ChildOrder.market_sell(product_code='BTC_JPY', size=m)
     response = order.send(api_key=api_key, api_secret=api_secret)
