@@ -79,8 +79,7 @@ def private_api_example():
 
 
 # 実際に注文する
-import math
-from fractions import Fraction
+from fxtrade.math import floor
 from fxtrade.interface.bitflyer import ChildOrder, TradingCommission
 
 def limit_buy():
@@ -106,18 +105,6 @@ def market_buy():
     order = ChildOrder.market_buy(product_code='BTC_JPY', size=0.001)
     response = order.send(api_key=api_key, api_secret=api_secret)
     print(response)
-
-def floor(x: float | Fraction, n: int=6) -> float:
-    """
-    Return floor at the specified digit.
-
-    Parameters
-    ----------
-    n : int, default 6
-        Specify the n-th decimal place. Must be non-negative number.
-    """
-    p = 10 ** n
-    return math.floor(float(x * p)) / p
 
 def market_sell():
     # APIキーの取得
