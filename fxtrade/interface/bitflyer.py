@@ -259,6 +259,47 @@ def get_executions(
     return send_request(base_url, endpoint, params=params)
 
 
+def get_executions_backward(
+    product_code: str = "BTC_JPY",
+    count: int | str = 100,
+    before: int | str = None,
+    after: int | str = None,
+    max_iter: int = 100,
+    sleep: int | float = 1,
+):
+    ret = []
+    for _ in range(max_iter):
+        response = get_executions(
+            product_code=product_code, count=count, before=before, after=after
+        )
+
+        if response.status_code != requests.codes.ok:
+            # 通信エラーや取得できる範囲を超えて取得した場合
+            ret.append(response)
+            break
+
+        exec_list = response.json()
+
+        if len(exec_list) == 0:
+            # before < after の関係になったなど、
+            # 条件に一致する取引が存在しなくなった
+            break
+
+        # APIの挙動としては、before から after まで遡る方向に取得される。
+        # よって取得したうちの最小の id が、次の最大の id となる。
+        before = min([x["id"] for x in exec_list])
+
+        # response をそのまま格納していき、
+        # どのように扱うかは外部に任せる。
+        ret.append(response)
+
+        # rate limit は 0.6 秒くらいなので
+        # 安全マージンを入れて 1 秒
+        time.sleep(sleep)
+
+    return ret
+
+
 class Execution(BaseModel):
     id: int
     side: str
@@ -284,6 +325,51 @@ class Execution(BaseModel):
         )
         response.raise_for_status()
         return [Execution(**execution) for execution in response.json()]
+
+    @staticmethod
+    def get_backward(
+        product_code: str = "BTC_JPY",
+        count: int | str = None,
+        before: int | str = None,
+        after: int | str = None,
+        max_iter: int = 500,
+        sleep: int | float = 1,
+    ):
+        responses = get_executions_backward(
+            product_code=product_code,
+            count=count,
+            before=before,
+            after=after,
+            max_iter=max_iter,
+            sleep=sleep,
+        )
+
+        if len(responses) == 0:
+            # max_iter が 0 のケース
+            # エラーにしてもよいが、挙動としては正常といえる。
+            return []
+
+        if responses[0].status_code != requests.codes.ok:
+            # １回目のリクエストが失敗しているなら指定の仕方が悪い可能性が高いのでエラー
+            responses[0].raise_for_status()
+        if responses[-1].status_code == requests.codes.bad_request:
+            # １回目のリクエストが成功していて、それよりも後の末尾が 400 bad_request の場合、
+            # 取得中に取得限界（30日前まで）に達した可能性が高い。
+            # この場合は末尾のみ取り除けば残りは正常。
+            responses.pop(-1)
+        elif responses[-1].status_code != requests.codes.ok:
+            # 200 ok か 400 bad_request 以外で終端している場合は、
+            # 予期せぬエラーである可能性が高い。
+            responses[-1].raise_for_status()
+
+        exec_list = []
+        for response in responses:
+            exec_list.extend(response.json())
+
+        return [
+            Execution(**execution)
+            for execution in sorted(exec_list, key=lambda x: x["id"])
+        ]
 
 
 ### GET /v1/getfundingrate

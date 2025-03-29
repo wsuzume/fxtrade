@@ -1,4 +1,3 @@
-
 from fxtrade.interface.bitflyer import *
 
 

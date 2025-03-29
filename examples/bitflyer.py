@@ -61,6 +61,17 @@ def public_api_example():
     # pprint(chats)
 
 
+def get_executions():
+    # 約定履歴を最大で 30 日前まで可能な限り取得できる関数。
+    # 本当に取得すると大変なので count, max_iter は小さい値にしてある。
+    # count は一度のリクエストで取得する件数で、最大 500 まで。それ以上を指定しても 500 件までしか返らない。
+    # max_iter はいくらでも大きな値を指定できるが、rate_limit が 0.6 秒なので、リクエストは１秒おきに送信する。
+    executions = Execution.get_backward(
+        product_code="BTC_JPY", count=10, max_iter=3, after=2488192577
+    )
+    pprint(executions)
+
+
 # Private API
 from fxtrade.interface.bitflyer import (
     Balance,
@@ -166,6 +177,8 @@ def market_sell():
 
 if __name__ == "__main__":
     public_api_example()
+    # get_executions()
+
     # private_api_example()
 
     ### 実際に取引が行われるので注意！！
