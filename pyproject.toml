@@ -1,19 +1,26 @@
-[tool.poetry]
+[project]
 name = "fxtrade"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
-authors = ["wsuzume <joshnobus@gmail.com>"]
-license = "MIT"
+authors = [
+    {name = "wsuzume",email = "joshnobus@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "pydantic (>=2.11.1,<3.0.0)",
+    "requests (>=2.32.3,<3.0.0)"
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
+[tool.poetry]
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.11.2"
-pre-commit = "^4.2.0"
+poetry = "^2.1.2"
+jupyterlab = "^4.3.6"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
