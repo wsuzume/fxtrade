@@ -13,8 +13,8 @@ def assign_unique_name_to_executions(
     min_id = xs[0]["id"]
     max_id = xs[-1]["id"]
 
-    min_date = parser(xs[0]["exec_date"])
-    max_date = parser(xs[-1]["exec_date"])
+    min_date = parser.isoparse(xs[0]["exec_date"])
+    max_date = parser.isoparse(xs[-1]["exec_date"])
 
     return "_".join(
         [
