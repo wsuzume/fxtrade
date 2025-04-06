@@ -1,6 +1,7 @@
 import pandas as pd
 from datetime import datetime
 from dateutil import parser
+from fractions import Fraction
 
 ######## utils for saving exec_list
 import uuid
