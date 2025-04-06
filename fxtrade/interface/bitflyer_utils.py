@@ -157,3 +157,17 @@ def calc_price(df):
             break
 
     return pd.DataFrame(rows)
+
+
+def calc_balance_transition(df):
+    """
+    手持ち資産の推移を計算する。trade_merge でマージした df を引数に与える。
+    """
+    transition = df["balance_x"].apply(int) + df["balance_y"].apply(Fraction).multiply(
+        df["price_x"].apply(int)
+    )
+
+    df_transition = df[["trade_date"]].copy()
+    df_transition["transition"] = transition
+
+    return df_transition
