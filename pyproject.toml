@@ -1,6 +1,6 @@
 [project]
 name = "fxtrade"
-version = "0.1.3"
+version = "0.1.4"
 description = ""
 authors = [
     {name = "wsuzume",email = "joshnobus@gmail.com"}
